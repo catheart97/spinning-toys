@@ -205,7 +205,6 @@ function App() {
     const [velocityChart, setVelocityChart] = React.useState<JSX.Element>();
     const [angularVelocityChart, setAngularVelocityChart] = React.useState<JSX.Element>();
     const [energyChart, setEnergyChart] = React.useState<JSX.Element>();
-    const [torqueChart, setTorqueChart] = React.useState<JSX.Element>();
 
     const [simulate, setSimulate] = React.useState(false);
     const simulateState = React.useRef(simulate);
@@ -214,7 +213,6 @@ function App() {
         setVelocityChart(<></>);
         setAngularVelocityChart(<></>)
         setEnergyChart(<></>)
-        setTorqueChart(<></>)
 
         setTimeout(() => {
 
@@ -227,9 +225,6 @@ function App() {
                     wx: val.angularVelocity.x,
                     wy: val.angularVelocity.y,
                     wz: val.angularVelocity.z,
-                    tx: val.torque.x,
-                    ty: val.torque.y,
-                    tz: val.torque.z,
                     Ekin: val.kineticEnergy,
                     Epot: val.potentialEnergy,
                     Erot: val.rotationalEnergy,
@@ -269,17 +264,6 @@ function App() {
                     <Line type="monotone" dataKey="Erot" stroke="#4ade80" dot={false} />
                     <Line type="monotone" dataKey="Epot" stroke="#fbbf24" dot={false} />
                     <Line type="monotone" dataKey="E" stroke="#38bdf8" dot={false} />
-                </LineChart>
-            )
-            setTorqueChart(
-                <LineChart width={300} height={200} data={data}>
-                    <XAxis dataKey="t" tickFormatter={(val: number, _) => { return val.toFixed(1) }} />
-                    <YAxis />
-                    <CartesianGrid stroke="#090909" strokeDasharray="5 5" />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="tx" stroke="#f87171" dot={false} />
-                    <Line type="monotone" dataKey="ty" stroke="#4ade80" dot={false} />
-                    <Line type="monotone" dataKey="tz" stroke="#38bdf8" dot={false} />
                 </LineChart>
             )
         }, 100)
@@ -376,7 +360,7 @@ function App() {
     }
 
     const setupTop = () => {
-        top.current = new TippeTop("top", scene.current!);
+        top.current = new Rattleback("top", scene.current!);
         // top.current = new HalfTop("halftop", scene.current!);
 
         const ground = BabylonJS.CreatePlane("ground", {
@@ -569,11 +553,6 @@ function App() {
                         <div className='w-full text-right flex flex-col gap-3'>
                             <InlineMath math="E\ [\frac{\text{kg} \cdot \text{m}^2}{\text{s}^2}]" />
                             {energyChart}
-                        </div>
-
-                        <div className='w-full text-right flex flex-col gap-3'>
-                            <InlineMath math="M\ [\frac{\text{kg} \cdot \text{m}^2}{\text{s}^2}]" />
-                            {torqueChart}
                         </div>
                     </div>
                     <div className='grow'></div>
