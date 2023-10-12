@@ -89,10 +89,11 @@ void inertia(double a, double b, double c) {
 Vector3d drdt(Vector3d &w, Vector3d &r, Matrix3d &B_1) {
   //  double s = sqrt(e3.transpose()*B_1*e3);
   double s = -e3.transpose() * r;
-  return (w.cross(r) + B_1 * w.cross(e3) / s +
-          r * (e3.transpose() * w.cross(r) / s));
-  //  return(w.cross(r)+B_1*w.cross(e3)/s+r*(e3.transpose()*B_1*w.cross(e3)/(s*s)));
-  //  return(w.cross(r)+e3.cross((B_1*w.cross(e3)).cross(B_1*e3))/(s*s*s));
+
+  auto t = r * (e3.transpose() * w.cross(r) / s);
+  std::cout << "t = " << t[0] << " " << t[1] << " " << t[2] << std::endl;
+
+  return (w.cross(r) + B_1 * w.cross(e3) / s + r * (e3.transpose() * w.cross(r) / s));
 }
 
 VectorXd dfdt(double t, VectorXd &y) {
@@ -109,12 +110,24 @@ VectorXd dfdt(double t, VectorXd &y) {
   Matrix3d E = Matrix3d::Identity();
 
   Vector3d r = -B_1 * e3 / sqrt(e3.transpose() * B_1 * e3);
+
   Vector3d dr = drdt(w, r, B_1);
   r = r + d * R * e3;
+
+
+  std::cout << "r =" << r(0) << " " << r(1) << " " << r(2) << std::endl;
   dr = dr + d * w.cross(R * e3);
+  std::cout << "dr =" << dr(0) << " " << dr(1) << " " << dr(2) << std::endl;
+
   double r2 = r.dot(r);
   Matrix3d I_1 = (I - r * r.transpose() * m + E * (m * r2)).inverse();
+
   Vector3d u = r.cross(e3) * m * g - w.cross(I * w) - r.cross(w.cross(dr)) * m;
+
+  auto rxu = I * w;
+  std::cout << "u = " << u[0] << " " << u[1] << " " << u[2] << std::endl;
+  exit(0);
+
   Vector3d dw = I_1 * u;
   Vector3d dv = -dw.cross(r) - w.cross(dr);
   Vector3d dc = v;
@@ -147,6 +160,7 @@ int main() {
   std::cout << B0(1, 0) << " " << B0(1, 1) << " " << B0(1, 2) << std::endl;
   std::cout << B0(2, 0) << " " << B0(2, 1) << " " << B0(2, 2) << std::endl;
 
+
   Vector3d r = -B_1 * e3 / sqrt(e3.transpose() * B_1 * e3);
   r = r + d * R * e3;
   std::cout << "r = " << r[0] << " " << r[1] << " " << r[2] << std::endl;
@@ -168,15 +182,17 @@ int main() {
     B = R * B0 * RT;
     B_1 = B.inverse();
     I = R * I0 * RT;
-    double E1 = 0.5 * m * v.dot(v);
-    double E2 = 0.5 * w.transpose() * I * w;
-    double E3 = m * g * (c[2] - 1.0);
-    VectorXd dy = dfdt(t, y);
-    Vector3d dv(dy[7], dy[8], dy[9]);
-    Vector3d dw(dy[10], dy[11], dy[12]);
-    double dE = m * v.dot(dv) + w.dot(I * dw) + m * g * e3.dot(v);
-    Vector3d u = R.transpose() * w;
-    std::cout << u[0] << " " << u[1] << " " << u[2] << std::endl;
-    y = rk4(t, h, y, dfdt);
+
+    // double E1 = 0.5 * m * v.dot(v);
+    // double E2 = 0.5 * w.transpose() * I * w;
+    // double E3 = m * g * (c[2] - 1.0);
+    // VectorXd dy = dfdt(t, y);
+    // Vector3d dv(dy[7], dy[8], dy[9]);
+    // Vector3d dw(dy[10], dy[11], dy[12]);
+    // double dE = m * v.dot(dv) + w.dot(I * dw) + m * g * e3.dot(v);
+    // Vector3d u = R.transpose() * w;
+    // std::cout << u[0] << " " << u[1] << " " << u[2] << std::endl;
+    y = euler(t, h, y, dfdt);
+    exit(0);
   }
 }
