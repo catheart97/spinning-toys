@@ -4,12 +4,13 @@
 
 using namespace Eigen;
 
-Vector3d e3(0.0, 0.0, 1.0);
-Vector3d p(0.5, 0.5, 0.0);
+const Vector3d e3(0.0, 1.0, 0.0);
+const Vector3d p(0.5, 0.0, 0.5);
+const double g = 9.81;
+const double mE = 0.1 * 100;
+const double mp = 0.05 * 100;
+
 Matrix3d I0, B0;
-double g = 9.81;
-double mE = 0.1 * 100;
-double mp = 0.05 * 100;
 double m, d;
 
 // Explizite numerische Loesungsverfahren fuer eine gewoehnliche
@@ -21,6 +22,41 @@ double m, d;
 // y_in = Startwerte zum Zeitpunkt t
 // y_out = Endwerte zum Zeitpunkt t+h
 // f = rechte Seite
+
+template <typename T> void print(const char *label, T &v) {
+  std::cout << label << " = (";
+  for (Eigen::Index i = 0; i < v.size(); ++i) {
+    std::cout << v[i];
+    if (i != v.size() - 1) {
+      std::cout << ", ";
+    }
+  }
+  std::cout << ")" << std::endl;
+}
+
+void print(const char *label, Matrix3d &m) {
+  for (Eigen::Index i = 0; i < m.rows(); ++i) {
+
+    if (i == m.rows() / 2) {
+      std::cout << label << " = |";
+    } else {
+      for (size_t i = 0; i < strlen(label) + 3; ++i) {
+        std::cout << " ";
+      }
+      std::cout << "|";
+    }
+
+    for (Eigen::Index j = 0; j < m.cols(); ++j) {
+      std::cout << m(i, j);
+      if (j != m.cols() - 1) {
+        std::cout << ", ";
+      }
+    }
+    std::cout << "|" << std::endl;
+  }
+}
+
+void print(const char *label, Quaterniond &q) { print(label, q.coeffs()); }
 
 // Euler: 1.Ordnung
 VectorXd euler(double t, double h, VectorXd &y_in,
@@ -75,25 +111,19 @@ void inertia(double a, double b, double c) {
   Matrix3d P = p.dot(p) * Matrix3d::Identity() - p * p.transpose();
 
   d = mE / m * 3.0 * c / 8.0;
-  Vector3d cr(0.0, 0.0, -d);
+  Vector3d cr(0.0, -d, 0.0);
   Matrix3d CR = cr.dot(cr) * Matrix3d::Identity() - cr * cr.transpose();
 
   I0 = I0 + 2 * mp * P - m * CR;
 
-  std::cout << "I0:" << std::endl;
-  std::cout << I0(0, 0) << " " << I0(0, 1) << " " << I0(0, 2) << std::endl;
-  std::cout << I0(1, 0) << " " << I0(1, 1) << " " << I0(1, 2) << std::endl;
-  std::cout << I0(2, 0) << " " << I0(2, 1) << " " << I0(2, 2) << std::endl;
+  print("I0", I0);
+  print("B0", B0);
 }
 
 Vector3d drdt(Vector3d &w, Vector3d &r, Matrix3d &B_1) {
-  //  double s = sqrt(e3.transpose()*B_1*e3);
   double s = -e3.transpose() * r;
-
-  auto t = r * (e3.transpose() * w.cross(r) / s);
-  std::cout << "t = " << t[0] << " " << t[1] << " " << t[2] << std::endl;
-
-  return (w.cross(r) + B_1 * w.cross(e3) / s + r * (e3.transpose() * w.cross(r) / s));
+  return (w.cross(r) + B_1 * w.cross(e3) / s +
+          r * (e3.transpose() * w.cross(r) / s));
 }
 
 VectorXd dfdt(double t, VectorXd &y) {
@@ -103,36 +133,45 @@ VectorXd dfdt(double t, VectorXd &y) {
   Vector3d w(y[10], y[11], y[12]);
 
   Matrix3d R = q.toRotationMatrix();
+
+
   Matrix3d RT = R.transpose();
   Matrix3d B = R * B0 * RT;
   Matrix3d B_1 = B.inverse();
   Matrix3d I = R * I0 * RT;
   Matrix3d E = Matrix3d::Identity();
 
+  print("I", I);
+  print("B_1", B_1);
+
   Vector3d r = -B_1 * e3 / sqrt(e3.transpose() * B_1 * e3);
 
+  print("r", r);
+
   Vector3d dr = drdt(w, r, B_1);
+  print("dr", dr);
   r = r + d * R * e3;
 
-
-  std::cout << "r =" << r(0) << " " << r(1) << " " << r(2) << std::endl;
+  print("r", r);
   dr = dr + d * w.cross(R * e3);
-  std::cout << "dr =" << dr(0) << " " << dr(1) << " " << dr(2) << std::endl;
+  print("dr", dr);
 
   double r2 = r.dot(r);
   Matrix3d I_1 = (I - r * r.transpose() * m + E * (m * r2)).inverse();
+  print("I_1", I_1);
 
   Vector3d u = r.cross(e3) * m * g - w.cross(I * w) - r.cross(w.cross(dr)) * m;
-
-  auto rxu = I * w;
-  std::cout << "u = " << u[0] << " " << u[1] << " " << u[2] << std::endl;
-  exit(0);
+  print("u", u);
 
   Vector3d dw = I_1 * u;
+  print("dw", dw);
   Vector3d dv = -dw.cross(r) - w.cross(dr);
+  print("dv", dv);
   Vector3d dc = v;
+  print("dc", dc);
   Quaterniond qw(0.0, w.x(), w.y(), w.z());
   Quaterniond dq((qw * q).coeffs() * 0.5);
+  print("dq", dq);
 
   VectorXd dy(13);
   dy << dc[0], dc[1], dc[2], dq.w(), dq.x(), dq.y(), dq.z(), dv[0], dv[1],
@@ -142,12 +181,13 @@ VectorXd dfdt(double t, VectorXd &y) {
 
 int main() {
   double goldenratio = 0.5 * (1.0 + sqrt(5.0));
-  std::cout << goldenratio << std::endl;
   inertia(goldenratio, 1.0, 1.0);
-  Vector3d c(0.0, 0.0, 1.0 - d);
-  std::cout << "c = " << c[0] << " " << c[1] << " " << c[2] << std::endl;
+  Vector3d c(0.0, 1.0 - d, 0.0);
+  print("c", c);
   Quaterniond q(1.0, 0.0, 0.0, 0.0);
-  Vector3d w(0.01, -0.02, 2.0);
+  print("q", q);
+  Vector3d w(0.01, 2.0, -0.02);
+  print("w", w);
 
   Matrix3d R = q.toRotationMatrix();
   Matrix3d RT = R.transpose();
@@ -155,18 +195,9 @@ int main() {
   Matrix3d B_1 = B.inverse();
   Matrix3d I;
 
-  std::cout << "B0:" << std::endl;
-  std::cout << B0(0, 0) << " " << B0(0, 1) << " " << B0(0, 2) << std::endl;
-  std::cout << B0(1, 0) << " " << B0(1, 1) << " " << B0(1, 2) << std::endl;
-  std::cout << B0(2, 0) << " " << B0(2, 1) << " " << B0(2, 2) << std::endl;
-
-
   Vector3d r = -B_1 * e3 / sqrt(e3.transpose() * B_1 * e3);
   r = r + d * R * e3;
-  std::cout << "r = " << r[0] << " " << r[1] << " " << r[2] << std::endl;
   Vector3d v = r.cross(w);
-  std::cout << "v = " << v[0] << " " << v[1] << " " << v[2] << std::endl;
-
   VectorXd y(13);
   y << c[0], c[1], c[2], q.w(), q.x(), q.y(), q.z(), v[0], v[1], v[2], w[0],
       w[1], w[2];
@@ -182,17 +213,21 @@ int main() {
     B = R * B0 * RT;
     B_1 = B.inverse();
     I = R * I0 * RT;
-
-    // double E1 = 0.5 * m * v.dot(v);
-    // double E2 = 0.5 * w.transpose() * I * w;
-    // double E3 = m * g * (c[2] - 1.0);
-    // VectorXd dy = dfdt(t, y);
-    // Vector3d dv(dy[7], dy[8], dy[9]);
-    // Vector3d dw(dy[10], dy[11], dy[12]);
-    // double dE = m * v.dot(dv) + w.dot(I * dw) + m * g * e3.dot(v);
-    // Vector3d u = R.transpose() * w;
-    // std::cout << u[0] << " " << u[1] << " " << u[2] << std::endl;
     y = euler(t, h, y, dfdt);
+
+    // Vector3d
+
+    c = Vector3d(y[0], y[1], y[2]);
+    q = Quaterniond(y[3], y[4], y[5], y[6]);
+    v = Vector3d(y[7], y[8], y[9]);
+    w = Vector3d(y[10], y[11], y[12]);
+
+    std::cout << "After first Step: " << std::endl;
+    print("c", c);
+    print("q", q);
+    print("v", v);
+    print("w", w);
+
     exit(0);
   }
 }

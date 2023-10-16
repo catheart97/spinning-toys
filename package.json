@@ -12,6 +12,7 @@
     "@babylonjs/core": "^6.18.0",
     "@babylonjs/inspector": "^6.18.0",
     "@babylonjs/loaders": "^6.18.0",
+    "@reduxjs/toolkit": "^1.9.7",
     "@types/react-katex": "^3.0.0",
     "bootstrap-icons": "^1.10.5",
     "react": "^18.2.0",
