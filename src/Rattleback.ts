@@ -27,6 +27,10 @@ export class Rattleback extends ITop {
     private B0: bjs.Matrix;
     private d: number;
 
+    private rx: number;
+    private ry: number;
+    private rz: number;
+
     constructor(name: string, scene: bjs.Scene) {
 
         const massE = 0.1 * 100;
@@ -58,12 +62,13 @@ export class Rattleback extends ITop {
         const boxCSG = bjs.CSG.FromMesh(box);
 
         const mesh = ellipsoidCSG.subtract(boxCSG).toMesh("rattleback", TopMaterial(scene), scene);
+        // const mesh = ellipsoid;
 
         scene.removeMesh(ellipsoid);
         scene.removeMesh(box);
 
         const massP = 0.05 * 100;
-        const p = new bjs.Vector3(0.5, 0, 0.5);
+        const p = new bjs.Vector3(0.5, 0.5, 0);
 
         const totalMass = 2 * massP + massE;
         const d = massE / totalMass * 3 * ry / 8;
@@ -100,29 +105,39 @@ export class Rattleback extends ITop {
         mesh.parent = this;
         this.c = centerOfMass;
         this.d = d;
-        this.simulationStepsPerFrame = 1;
+        this.simulationStepsPerFrame = 10;
+
+        this.rx = rx;
+        this.ry = ry;
+        this.rz = rz;
+
         this.reset();
     }
 
     contactPoint(worldRotation: bjs.Matrix): bjs.Vector3 {
-        const world = worldRotation.clone();
-        const B_inv = (world.multiply(this.B0.clone().multiply(world.transpose()))).invert();
-        B_inv.setRowFromFloats(3, 0, 0, 0, 1);
-        // extreme point in y-direction (upwards/downwards)
-        let r = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), B_inv).scale(
-            -1 / Math.sqrt(
-                bjs.Vector3.Dot(
-                    bjs.Vector3.Up(),
-                    bjs.Vector3.TransformCoordinates(
-                        bjs.Vector3.Up(),
-                        B_inv
-                    )
-                )
-            )
-        )
-        const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), world)
-        r = r.add(Re3.scale(this.d))
-        return r;
+        // const world = worldRotation.clone();
+        // const B_inv = (world.multiply(this.B0.clone().multiply(world.transpose()))).invert();
+        // B_inv.setRowFromFloats(3, 0, 0, 0, 1);
+        // // extreme point in y-direction (upwards/downwards)
+        // let r = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), B_inv).scale(
+        //     -1 / Math.sqrt(
+        //         bjs.Vector3.Dot(
+        //             bjs.Vector3.Up(),
+        //             bjs.Vector3.TransformCoordinates(
+        //                 bjs.Vector3.Up(),
+        //                 B_inv
+        //             )
+        //         )
+        //     )
+        // )
+        // const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), world)
+        // r = r.add(Re3.scale(this.d))
+        // return r;
+
+        const u = this.getWorldMatrix().getRotationMatrix().transpose().getRow(1)!.toVector3()!;
+        let p = new bjs.Vector3(-u.x * this.rx * this.rx, -u.y * this.ry * this.ry, -u.z * this.rz * this.rz);
+        p = p.scale(Math.sqrt(1 / ((p.x * p.x  / (this.rx * this.rx)) + (p.y * p.y / (this.ry * this.ry)) + (p.z * p.z / (this.rz * this.rz)))));
+        return bjs.Vector3.TransformCoordinates(p, worldRotation);
     }
 
     reset() {
@@ -156,7 +171,7 @@ export class Rattleback extends ITop {
 
         const world = new bjs.Matrix();
         transform.q.toRotationMatrix(world);
-        
+
         const inertia = world.multiply(this.momentOfInertia.multiply(world.transpose()));
         inertia.setRowFromFloats(3, 0, 0, 0, 1);
         console.log("I", inertia)
@@ -177,13 +192,13 @@ export class Rattleback extends ITop {
             )
         )
         console.log("r", r)
+        const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), world)
+        r = r.add(Re3.scale(this.d))
 
         // derivative of contact point
         let dr = this.drdt(r, B_inv, transform);
         console.log("dr", dr)
 
-        const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), world)
-        r = r.add(Re3.scale(this.d))
         console.log("r", r)
         dr = dr.add(bjs.Vector3.Cross(transform.w, Re3).scale(this.d))
         console.log("dr", dr)
@@ -238,15 +253,6 @@ export class Rattleback extends ITop {
 
     step(dt: number, _world: bjs.Matrix, _inertia: bjs.Matrix): void {
 
-        dt = 5e-4;
-
-        const initial: Transform = {
-            q: this.rotationQuaternion!.clone(),
-            p: this.position.clone(),
-            v: this.velocity.clone(),
-            w: this.angularVelocity.clone()
-        }
-        
 
         const euler = (transform: Transform, dt: number) => {
             const k1 = this.dfdt(transform);
@@ -304,16 +310,26 @@ export class Rattleback extends ITop {
             this.position = this.position.add(k1.p.add(k2.p.scale(2)).add(k3.p.scale(2)).add(k4.p).scale(dt / 6));
         }
 
-        if (s == 0) {
-            // console.log("Initial Transform", initial);
-            euler(initial, dt);
-            this.rotationQuaternion!.normalize();
+        // console.log("Initial Transform", initial);
+
+        dt = 5e-4;
+
+        const initial: Transform = {
+            q: this.rotationQuaternion!.clone(),
+            p: this.position.clone(),
+            v: this.velocity.clone(),
+            w: this.angularVelocity.clone()
         }
 
-        // this.position.y = -this.contactPoint(_world).y;
+        rk4(initial, dt);
+        // this.rotate(bjs.Vector3.Forward(), dt * Math.PI / 3);
+        // this.rotate(bjs.Vector3.Right(), dt * Math.PI / 2);
+        this.rotationQuaternion!.normalize();
 
+        // this.position.addInPlace(this.c)
         // s += 1;
         // s = s % 200;
+
     }
 }
 

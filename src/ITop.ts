@@ -121,8 +121,15 @@ export abstract class ITop extends bjs.TransformNode {
                     })
                 }
             }
+            // const world = this.getWorldMatrix().getRotationMatrix();
+            // const pWorld = this.contactPoint(world);
+            // const pos = this.getAbsolutePosition().clone();
+            // pos.y = -pWorld.y;
+            // this.setAbsolutePosition(pos)
         } else {
-            // this.rotate(bjs.Vector3.Left(), dt * Math.PI / 2);
+            this.rotate(bjs.Vector3.Left(), dt * Math.PI / 2);
+            this.rotate(bjs.Vector3.Forward(), dt * Math.PI / 3);
+            this.rotate(bjs.Vector3.Up(), dt * Math.PI / 4);
             const world = this.getWorldMatrix().getRotationMatrix();
             const pWorld = this.contactPoint(world);
             this.position.y = -pWorld.y;

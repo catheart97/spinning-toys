@@ -1,6 +1,7 @@
 #include "Eigen/Dense"
 #include <iomanip>
 #include <iostream>
+#include <fstream>
 
 using namespace Eigen;
 
@@ -202,18 +203,28 @@ int main() {
   y << c[0], c[1], c[2], q.w(), q.x(), q.y(), q.z(), v[0], v[1], v[2], w[0],
       w[1], w[2];
 
+  std::fstream file("Rattleback.csv", std::ios::out);
+  file << "t,cx,cy,cz,qw,qx,qy,qz,vx,vy,vz,wx,wy,wz" << std::endl;
+
   double h = 5e-4;
   for (double t = 0.0; t < 60.0; t += h) {
     c = Vector3d(y[0], y[1], y[2]);
     q = Quaterniond(y[3], y[4], y[5], y[6]);
     v = Vector3d(y[7], y[8], y[9]);
     w = Vector3d(y[10], y[11], y[12]);
+
+
+    file << t << "," << c[0] << "," << c[1] << "," << c[2] << "," << q.w() << ","
+         << q.x() << "," << q.y() << "," << q.z() << "," << v[0] << "," << v[1]
+         << "," << v[2] << "," << w[0] << "," << w[1] << "," << w[2]
+         << std::endl;
+
     R = q.toRotationMatrix();
     RT = R.transpose();
     B = R * B0 * RT;
     B_1 = B.inverse();
     I = R * I0 * RT;
-    y = euler(t, h, y, dfdt);
+    y = rk4(t, h, y, dfdt);
 
     // Vector3d
 
@@ -227,7 +238,5 @@ int main() {
     print("q", q);
     print("v", v);
     print("w", w);
-
-    exit(0);
   }
 }
