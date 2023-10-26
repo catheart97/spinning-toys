@@ -11,6 +11,31 @@ type Transform = {
     w: bjs.Vector3
 }
 
+export const quaternionToMatrix = (q: bjs.Quaternion) => {
+    const tx = 2 * q.x;
+    const ty = 2 * q.y;
+    const tz = 2 * q.z;
+    const twx = tx * q.w;
+    const twy = ty * q.w;
+    const twz = tz * q.w;
+    const txx = tx * q.x;
+    const txy = ty * q.x;
+    const txz = tz * q.x;
+    const tyy = ty * q.y;
+    const tyz = tz * q.y;
+    const tzz = tz * q.z;
+    const m = new bjs.Matrix();
+    m.setRowFromFloats(0, 1 - (tyy + tzz), txy - twz, txz + twy, 0);
+    m.setRowFromFloats(1, txy + twz, 1 - (txx + tzz), tyz - twx, 0);
+    m.setRowFromFloats(2, txz - twy, tyz + twx, 1 - (txx + tyy), 0);
+    m.setRowFromFloats(3, 0, 0, 0, 1);
+    return m;
+}
+
+export const quatMul = (a: bjs.Quaternion, b: bjs.Quaternion) => {
+    return a.multiply(b);
+}
+
 export const downloadString = (text: string, fileName: string) => {
     const element = document.createElement('a');
     element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
@@ -20,6 +45,34 @@ export const downloadString = (text: string, fileName: string) => {
     element.click();
     document.body.removeChild(element);
 }
+
+import DataCSV from "../Rattleback.csv?raw"
+
+const DATA : Array<{
+    position: bjs.Vector3,
+    rotation: bjs.Quaternion,
+}> = []
+
+const LINES = DataCSV.split("\n");
+for  (let i = 1; i < LINES.length; i++) {
+    // t, cx, cy, cz, qw, qx, qy, qz
+    const line = LINES[i].split(",");
+    const t = parseFloat(line[0]);
+    const cx = parseFloat(line[1]);
+    const cy = parseFloat(line[2]);
+    const cz = parseFloat(line[3]);
+    const qw = parseFloat(line[4]);
+    const qx = parseFloat(line[5]);
+    const qy = parseFloat(line[6]);
+    const qz = parseFloat(line[7]);
+    const position = new bjs.Vector3(cx, cy, cz);
+    const rotation = new bjs.Quaternion(qx, qy, qz, qw);
+    DATA.push({
+        position,
+        rotation
+    })
+}
+
 
 export class Rattleback extends ITop {
 
@@ -68,11 +121,11 @@ export class Rattleback extends ITop {
         scene.removeMesh(box);
 
         const massP = 0.05 * 100;
-        const p = new bjs.Vector3(0.5, 0.5, 0);
+        const p = new bjs.Vector3(0.5, 0, 0.5);
 
         const totalMass = 2 * massP + massE;
         const d = massE / totalMass * 3 * ry / 8;
-        const centerOfMass = new bjs.Vector3(0, d, 0);
+        const centerOfMass = new bjs.Vector3(0, -d, 0);
         const CR = bjs.Matrix.Identity().scale(bjs.Vector3.Dot(centerOfMass, centerOfMass)).add(
             dyad(centerOfMass, centerOfMass).scale(-1)
         );
@@ -101,7 +154,10 @@ export class Rattleback extends ITop {
         console.log("I0", this.momentOfInertia)
         console.log("B0", this.B0)
 
-        mesh.position = centerOfMass;
+        const position = new bjs.Vector3(
+            0, Math.abs(d), 0
+        )
+        mesh.position = position;
         mesh.parent = this;
         this.c = centerOfMass;
         this.d = d;
@@ -115,29 +171,24 @@ export class Rattleback extends ITop {
     }
 
     contactPoint(worldRotation: bjs.Matrix): bjs.Vector3 {
-        // const world = worldRotation.clone();
-        // const B_inv = (world.multiply(this.B0.clone().multiply(world.transpose()))).invert();
-        // B_inv.setRowFromFloats(3, 0, 0, 0, 1);
-        // // extreme point in y-direction (upwards/downwards)
-        // let r = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), B_inv).scale(
-        //     -1 / Math.sqrt(
-        //         bjs.Vector3.Dot(
-        //             bjs.Vector3.Up(),
-        //             bjs.Vector3.TransformCoordinates(
-        //                 bjs.Vector3.Up(),
-        //                 B_inv
-        //             )
-        //         )
-        //     )
-        // )
-        // const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), world)
-        // r = r.add(Re3.scale(this.d))
-        // return r;
-
-        const u = this.getWorldMatrix().getRotationMatrix().transpose().getRow(1)!.toVector3()!;
-        let p = new bjs.Vector3(-u.x * this.rx * this.rx, -u.y * this.ry * this.ry, -u.z * this.rz * this.rz);
-        p = p.scale(Math.sqrt(1 / ((p.x * p.x  / (this.rx * this.rx)) + (p.y * p.y / (this.ry * this.ry)) + (p.z * p.z / (this.rz * this.rz)))));
-        return bjs.Vector3.TransformCoordinates(p, worldRotation);
+        const R = quaternionToMatrix(this.rotationQuaternion!);
+        const B_inv = (R.multiply(this.B0.clone().multiply(R.transpose()))).invert();
+        B_inv.setRowFromFloats(3, 0, 0, 0, 1);
+        // extreme point in y-direction (upwards/downwards)
+        let r = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), B_inv).scale(
+            -1 / Math.sqrt(
+                bjs.Vector3.Dot(
+                    bjs.Vector3.Up(),
+                    bjs.Vector3.TransformCoordinates(
+                        bjs.Vector3.Up(),
+                        B_inv
+                    )
+                )
+            )
+        )
+        const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), R)
+        r = r.add(Re3.scale(this.d))
+        return r;
     }
 
     reset() {
@@ -169,14 +220,24 @@ export class Rattleback extends ITop {
 
     dfdt(transform: Transform): Transform {
 
-        const world = new bjs.Matrix();
-        transform.q.toRotationMatrix(world);
+        console.log("c", transform.p)
+        console.log("q", transform.q)
+        console.log("v", transform.v)
+        console.log("w", transform.w)
 
-        const inertia = world.multiply(this.momentOfInertia.multiply(world.transpose()));
-        inertia.setRowFromFloats(3, 0, 0, 0, 1);
-        console.log("I", inertia)
-        const B_inv = world.multiply(this.B0.clone().multiply(world.transpose())).invert();
-        B_inv.setRowFromFloats(3, 0, 0, 0, 1);
+        // R := world matrix
+        const R = quaternionToMatrix(transform.q);
+        // const R = new bjs.Matrix();
+        // transform.q.toRotationMatrix(R);
+
+        console.log("R", R);
+
+        // I := inertia
+        const I = R.multiply(this.momentOfInertia.clone().multiply(R.transpose()));
+        // I.setRowFromFloats(3, 0, 0, 0, 1);
+        console.log("I", I)
+        const B_inv = R.multiply(this.B0.clone().multiply(R.transpose())).invert();
+        // B_inv.setRowFromFloats(3, 0, 0, 0, 1);
         console.log("B_1", B_inv)
 
         // extreme point in y-direction (upwards/downwards)
@@ -192,20 +253,19 @@ export class Rattleback extends ITop {
             )
         )
         console.log("r", r)
-        const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), world)
-        r = r.add(Re3.scale(this.d))
-
-        // derivative of contact point
         let dr = this.drdt(r, B_inv, transform);
         console.log("dr", dr)
 
+        const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), R)
+        r = r.add(Re3.scale(this.d))
         console.log("r", r)
+
         dr = dr.add(bjs.Vector3.Cross(transform.w, Re3).scale(this.d))
         console.log("dr", dr)
 
-        const I_INV = inertia.clone().add(dyad(r, r).scale(-this.totalMass)).add(
+        const I_INV = (I.clone().add(dyad(r, r).scale(-this.totalMass)).add(
             bjs.Matrix.Identity().scale(this.totalMass * bjs.Vector3.Dot(r, r))
-        ).invert();
+        )).invert();
         I_INV.setRowFromFloats(3, 0, 0, 0, 1);
         console.log("I_1", I_INV)
 
@@ -214,7 +274,7 @@ export class Rattleback extends ITop {
             transform.w,
             bjs.Vector3.TransformCoordinates(
                 transform.w,
-                inertia
+                I
             )
         );
         const rxwxdr = bjs.Vector3.Cross(
@@ -231,8 +291,9 @@ export class Rattleback extends ITop {
         const dw = bjs.Vector3.TransformCoordinates(u, I_INV)
         console.log("dw", dw)
 
-        const dv = bjs.Vector3.Cross(r, dw).add(
-            bjs.Vector3.Cross(dr, transform.w)
+        console.log("w", transform.w)
+        const dv = bjs.Vector3.Cross(dw, r).scale(-1).subtract(
+            bjs.Vector3.Cross(transform.w, dr)
         );
         console.log("dv", dv)
 
@@ -240,7 +301,7 @@ export class Rattleback extends ITop {
         console.log("dc", dc)
 
         const qw = new bjs.Quaternion(transform.w.x, transform.w.y, transform.w.z, 0);
-        const dq = qw.multiply(transform.q).scale(0.5);
+        const dq = quatMul(qw, transform.q).scale(0.5);
         console.log("dq", dq)
 
         return {
@@ -254,21 +315,12 @@ export class Rattleback extends ITop {
     step(dt: number, _world: bjs.Matrix, _inertia: bjs.Matrix): void {
 
 
-        const euler = (transform: Transform, dt: number) => {
+        const euler = (transform: Transform, dt: number) : Transform => {
             const k1 = this.dfdt(transform);
-            this.rotationQuaternion = this.rotationQuaternion!.add(k1.q.scale(dt));
-            this.velocity = this.velocity.add(k1.v.scale(dt));
-            this.angularVelocity = this.angularVelocity.add(k1.w.scale(dt));
-            this.position = this.position.add(k1.p.scale(dt));
-
-            console.log("q", this.rotationQuaternion!)
-            console.log("v", this.velocity)
-            console.log("w", this.angularVelocity)
-            console.log("c", this.position)
-
+            return k1
         }
 
-        const heun = (transform: Transform, dt: number) => {
+        const heun = (transform: Transform, dt: number) : Transform => {
             const k1 = this.dfdt(transform);
             const k2 = this.dfdt({
                 q: transform.q.add(k1.q.scale(dt)),
@@ -277,58 +329,118 @@ export class Rattleback extends ITop {
                 w: transform.w.add(k1.w.scale(dt))
             })
 
-            this.rotationQuaternion = this.rotationQuaternion!.add(k1.q.add(k2.q).scale(0.5 * dt));
-            this.velocity = this.velocity.add(k1.v.add(k2.v).scale(0.5 * dt));
-            this.angularVelocity = this.angularVelocity.add(k1.w.add(k2.w).scale(0.5 * dt));
-            this.position = this.position.add(k1.p.add(k2.p).scale(0.5 * dt));
+            return {
+                q: transform.q.add(
+                    k1.q.add(k2.q).scale(dt / 2)
+                ),
+                p: transform.p.add(
+                    k1.p.add(k2.p).scale(dt / 2)
+                ),
+                v: transform.v.add(
+                    k1.v.add(k2.v).scale(dt / 2)
+                ),
+                w: transform.w.add(
+                    k1.w.add(k2.w).scale(dt / 2)
+                )
+            }
         }
 
-        const rk4 = (transform: Transform, dt: number) => {
+        const rk4 = (transform: Transform, dt: number) : Transform => {
+
+            const dt2 = dt / 2;
+            const dt3 = dt / 3;
+            const dt6 = dt / 6;
+
             const k1 = this.dfdt(transform);
-            const k2 = this.dfdt({
-                q: transform.q.add(k1.q.scale(0.5 * dt)).normalize(),
-                p: transform.p.add(k1.p.scale(0.5 * dt)),
-                v: transform.v.add(k1.v.scale(0.5 * dt)),
-                w: transform.w.add(k1.w.scale(0.5 * dt))
-            })
-            const k3 = this.dfdt({
-                q: transform.q.add(k2.q.scale(0.5 * dt)).normalize(),
-                p: transform.p.add(k2.p.scale(0.5 * dt)),
-                v: transform.v.add(k2.v.scale(0.5 * dt)),
-                w: transform.w.add(k2.w.scale(0.5 * dt))
-            })
-            const k4 = this.dfdt({
-                q: transform.q.add(k3.q.scale(dt)).normalize(),
+            let tmp = {
+                q: transform.q.add(k1.q.scale(dt2)),
+                p: transform.p.add(k1.p.scale(dt2)),
+                v: transform.v.add(k1.v.scale(dt2)),
+                w: transform.w.add(k1.w.scale(dt2))
+            }
+            
+            const k2 = this.dfdt(tmp)
+            tmp = {
+                q: transform.q.add(k2.q.scale(dt2)),
+                p: transform.p.add(k2.p.scale(dt2)),
+                v: transform.v.add(k2.v.scale(dt2)),
+                w: transform.w.add(k2.w.scale(dt2))
+            }
+
+            const k3 = this.dfdt(tmp)
+            tmp = {
+                q: transform.q.add(k3.q.scale(dt)),
                 p: transform.p.add(k3.p.scale(dt)),
                 v: transform.v.add(k3.v.scale(dt)),
                 w: transform.w.add(k3.w.scale(dt))
-            })
+            }
 
-            this.rotationQuaternion = this.rotationQuaternion!.add(k1.q.add(k2.q.scale(2)).add(k3.q.scale(2)).add(k4.q).scale(dt / 6));
-            this.velocity = this.velocity.add(k1.v.add(k2.v.scale(2)).add(k3.v.scale(2)).add(k4.v).scale(dt / 6));
-            this.angularVelocity = this.angularVelocity.add(k1.w.add(k2.w.scale(2)).add(k3.w.scale(2)).add(k4.w).scale(dt / 6));
-            this.position = this.position.add(k1.p.add(k2.p.scale(2)).add(k3.p.scale(2)).add(k4.p).scale(dt / 6));
+            const k4 = this.dfdt(tmp)
+
+            return {
+                q: transform.q.add(
+                    k1.q.add(k4.q).scale(dt6).add(
+                        k2.q.add(k3.q).scale(dt3)
+                    )
+                ),
+                p: transform.p.add(
+                    k1.p.add(k4.p).scale(dt6).add(
+                        k2.p.add(k3.p).scale(dt3)
+                    )
+                ),
+                v: transform.v.add(
+                    k1.v.add(k4.v).scale(dt6).add(
+                        k2.v.add(k3.v).scale(dt3)
+                    )
+                ),
+                w: transform.w.add(
+                    k1.w.add(k4.w).scale(dt6).add(
+                        k2.w.add(k3.w).scale(dt3)
+                    )
+                )
+            }
         }
 
-        // console.log("Initial Transform", initial);
+        // this.position = DATA[s].position;
+        // this.rotationQuaternion = DATA[s].rotation;
+        // s = (s + 10) % DATA.length;
+
+        // if (s >= 5) return;
 
         dt = 5e-4;
 
+        // convert from left handed to right handed coordinate system
+        const rotation = new bjs.Quaternion(
+            this.rotationQuaternion!.x,
+            this.rotationQuaternion!.y,
+            this.rotationQuaternion!.z,
+            this.rotationQuaternion!.w
+        );
+
         const initial: Transform = {
-            q: this.rotationQuaternion!.clone(),
+            q: rotation,
             p: this.position.clone(),
             v: this.velocity.clone(),
             w: this.angularVelocity.clone()
         }
 
-        rk4(initial, dt);
-        // this.rotate(bjs.Vector3.Forward(), dt * Math.PI / 3);
-        // this.rotate(bjs.Vector3.Right(), dt * Math.PI / 2);
-        this.rotationQuaternion!.normalize();
+        const res = rk4(initial, dt);
 
-        // this.position.addInPlace(this.c)
-        // s += 1;
-        // s = s % 200;
+        console.log(res);
+
+        this.rotationQuaternion = new bjs.Quaternion(
+            res.q.x,
+            res.q.y,
+            res.q.z,
+            res.q.w
+        );
+        this.position = res.p;
+        this.velocity = res.v;
+        this.angularVelocity = res.w;
+
+
+        
+        s++;
 
     }
 }

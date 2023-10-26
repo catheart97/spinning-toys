@@ -98,38 +98,35 @@ export abstract class ITop extends bjs.TransformNode {
 
                 // save graph data
                 this._time += dt;
-                if (i == this.simulationStepsPerFrame - 1) {
+                // if (i == this.simulationStepsPerFrame - 1) {
 
-                    const Ekin = 0.5 * this.velocity.lengthSquared() * this.totalMass;
-                    const Erot = 0.5 * bjs.Vector3.Dot(
-                        bjs.Vector3.TransformCoordinates(
-                            this.angularVelocity,
-                            inertia
-                        ),
-                        this.angularVelocity
-                    );
-                    const Epot = -this.getAbsolutePosition().y * this.totalMass * GRAVITY.length();
+                //     const Ekin = 0.5 * this.velocity.lengthSquared() * this.totalMass;
+                //     const Erot = 0.5 * bjs.Vector3.Dot(
+                //         bjs.Vector3.TransformCoordinates(
+                //             this.angularVelocity,
+                //             inertia
+                //         ),
+                //         this.angularVelocity
+                //     );
+                //     const Epot = -this.getAbsolutePosition().y * this.totalMass * GRAVITY.length();
 
-                    this.simulationData.push({
-                        time: this._time,
-                        velocity: this.velocity.clone(),
-                        angularVelocity: this.angularVelocity.clone(),
-                        kineticEnergy: Ekin,
-                        rotationalEnergy: Erot,
-                        potentialEnergy: Epot,
-                        totalEnergy: Ekin + Erot + Epot
-                    })
-                }
+                //     this.simulationData.push({
+                //         time: this._time,
+                //         velocity: this.velocity.clone(),
+                //         angularVelocity: this.angularVelocity.clone(),
+                //         kineticEnergy: Ekin,
+                //         rotationalEnergy: Erot,
+                //         potentialEnergy: Epot,
+                //         totalEnergy: Ekin + Erot + Epot
+                //     })
+                // }
             }
-            // const world = this.getWorldMatrix().getRotationMatrix();
-            // const pWorld = this.contactPoint(world);
-            // const pos = this.getAbsolutePosition().clone();
-            // pos.y = -pWorld.y;
-            // this.setAbsolutePosition(pos)
+            const world = this.getWorldMatrix().getRotationMatrix();
+            const pWorld = this.contactPoint(world);
+            const pos = this.getAbsolutePosition().clone();
+            pos.y = -pWorld.y;
+            this.setAbsolutePosition(pos)
         } else {
-            this.rotate(bjs.Vector3.Left(), dt * Math.PI / 2);
-            this.rotate(bjs.Vector3.Forward(), dt * Math.PI / 3);
-            this.rotate(bjs.Vector3.Up(), dt * Math.PI / 4);
             const world = this.getWorldMatrix().getRotationMatrix();
             const pWorld = this.contactPoint(world);
             this.position.y = -pWorld.y;

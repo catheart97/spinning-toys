@@ -309,7 +309,7 @@ function App() {
 
     const setupEnvironment = () => {
         const hdri = new BabylonJS.HDRCubeTexture(
-            "/spinning-toys/burnt_warehouse_2k.hdr",
+            "/spinning-toys/little_paris_under_tower_2k.hdr",
             scene.current!,
             128,
             false,
@@ -320,7 +320,7 @@ function App() {
         scene.current!.environmentTexture = hdri;
         scene.current!.environmentBRDFTexture = hdri;
 
-        const skybox = new BabylonJS.PhotoDome("skybox", "/spinning-toys/burnt_warehouse_2k.hdr", {}, scene.current!)
+        const skybox = new BabylonJS.PhotoDome("skybox", "/spinning-toys/little_paris_under_tower_4k.hdr", {}, scene.current!)
         skybox.infiniteDistance = true;
 
         const sunPosition = new BabylonJS.Vector3(1, 10, 1).normalize().scale(5);

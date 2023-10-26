@@ -127,13 +127,19 @@ Vector3d drdt(Vector3d &w, Vector3d &r, Matrix3d &B_1) {
           r * (e3.transpose() * w.cross(r) / s));
 }
 
-VectorXd dfdt(double t, VectorXd &y) {
+VectorXd dfdt(double, VectorXd &y) {
   Vector3d c(y[0], y[1], y[2]);
   Quaterniond q(y[3], y[4], y[5], y[6]);
   Vector3d v(y[7], y[8], y[9]);
   Vector3d w(y[10], y[11], y[12]);
 
+  print("c", c);
+  print("q", q);
+  print("v", v);
+  print("w", w);
+
   Matrix3d R = q.toRotationMatrix();
+  print("R", R);
 
 
   Matrix3d RT = R.transpose();
@@ -149,9 +155,10 @@ VectorXd dfdt(double t, VectorXd &y) {
 
   print("r", r);
 
+  
   Vector3d dr = drdt(w, r, B_1);
-  print("dr", dr);
   r = r + d * R * e3;
+  print("dr", dr);
 
   print("r", r);
   dr = dr + d * w.cross(R * e3);
@@ -238,5 +245,6 @@ int main() {
     print("q", q);
     print("v", v);
     print("w", w);
+    exit(0);
   }
 }
