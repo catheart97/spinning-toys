@@ -15,6 +15,23 @@ export const TopMaterial = (scene: bjs.Scene) => {
     }
 }
 
+export const quaternionToMatrix = (q: bjs.Quaternion) => {
+    let tq = q.clone();
+    tq.normalize();
+    tq.w = -tq.w;
+    let R = new bjs.Matrix();
+    tq.toRotationMatrix(R);
+    return R;
+}
+
+export const matMul = (a: bjs.Matrix, v: bjs.Vector3) => {
+    const res = new bjs.Vector3();
+    res.x = a.m[0] * v.x + a.m[1] * v.y + a.m[2] * v.z;
+    res.y = a.m[4] * v.x + a.m[5] * v.y + a.m[6] * v.z;
+    res.z = a.m[8] * v.x + a.m[9] * v.y + a.m[10] * v.z;
+    return res;
+}
+
 export const GRAVITY = bjs.Vector3.Down().scale(9.81);
 export const PHI = 1.6180339887;
 
@@ -77,57 +94,54 @@ export abstract class ITop extends bjs.TransformNode {
     abstract step(dt: number, world: bjs.Matrix, inertia : bjs.Matrix): void;
     abstract contactPoint(world: bjs.Matrix): bjs.Vector3
 
+
     tick(simulate: boolean) : void {
 
+        const getRotationMatrix = () => {
+            return quaternionToMatrix(this.rotationQuaternion ?? bjs.Quaternion.Identity());
+        }
+
         // Drag Object towards center
-        const dt = this.getScene().getEngine().getDeltaTime() / 1000;
-        const coreAcc = this.position.scale(-1);
-        coreAcc.y = 0;
-        this.position.addInPlace(coreAcc.scale(dt));
+        // const dt = this.getScene().getEngine().getDeltaTime() / 1000;
+        // const coreAcc = this.position.scale(-1);
+        // coreAcc.y = 0;
+        // this.position.addInPlace(coreAcc.scale(dt));
 
         if (simulate) {
-
             const dt = (this.getScene().getEngine().getDeltaTime() / 1000) / this.simulationStepsPerFrame;
 
             for (let i = 0; i < this.simulationStepsPerFrame; ++i) {
 
-                const world = this.getWorldMatrix().getRotationMatrix();
+                const world = getRotationMatrix();
                 const inertia = world.transpose().multiply(this.momentOfInertia.clone()).multiply(world);
 
                 this.step(dt, world, inertia);
 
                 // save graph data
                 this._time += dt;
-                // if (i == this.simulationStepsPerFrame - 1) {
+                if (i == this.simulationStepsPerFrame - 1) {
+                    const Ekin = 0.5 * this.velocity.lengthSquared() * this.totalMass;
+                    const Erot = 0.5 * bjs.Vector3.Dot(
+                        matMul(inertia, this.angularVelocity),
+                        this.angularVelocity
+                    );
+                    const Epot = this.getAbsolutePosition().y * this.totalMass * GRAVITY.length();
 
-                //     const Ekin = 0.5 * this.velocity.lengthSquared() * this.totalMass;
-                //     const Erot = 0.5 * bjs.Vector3.Dot(
-                //         bjs.Vector3.TransformCoordinates(
-                //             this.angularVelocity,
-                //             inertia
-                //         ),
-                //         this.angularVelocity
-                //     );
-                //     const Epot = -this.getAbsolutePosition().y * this.totalMass * GRAVITY.length();
-
-                //     this.simulationData.push({
-                //         time: this._time,
-                //         velocity: this.velocity.clone(),
-                //         angularVelocity: this.angularVelocity.clone(),
-                //         kineticEnergy: Ekin,
-                //         rotationalEnergy: Erot,
-                //         potentialEnergy: Epot,
-                //         totalEnergy: Ekin + Erot + Epot
-                //     })
-                // }
+                    this.simulationData.push({
+                        time: this._time,
+                        velocity: this.velocity.clone(),
+                        angularVelocity: this.angularVelocity.clone(),
+                        kineticEnergy: Ekin,
+                        rotationalEnergy: Erot,
+                        potentialEnergy: Epot,
+                        totalEnergy: Ekin + Erot + Epot
+                    })
+                }
+                const pWorld = this.contactPoint(getRotationMatrix());
+                this.position.y = -pWorld.y;
             }
-            const world = this.getWorldMatrix().getRotationMatrix();
-            const pWorld = this.contactPoint(world);
-            const pos = this.getAbsolutePosition().clone();
-            pos.y = -pWorld.y;
-            this.setAbsolutePosition(pos)
         } else {
-            const world = this.getWorldMatrix().getRotationMatrix();
+            const world = getRotationMatrix();
             const pWorld = this.contactPoint(world);
             this.position.y = -pWorld.y;
         }

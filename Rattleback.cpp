@@ -214,6 +214,7 @@ int main() {
   file << "t,cx,cy,cz,qw,qx,qy,qz,vx,vy,vz,wx,wy,wz" << std::endl;
 
   double h = 5e-4;
+  int step = 1;
   for (double t = 0.0; t < 60.0; t += h) {
     c = Vector3d(y[0], y[1], y[2]);
     q = Quaterniond(y[3], y[4], y[5], y[6]);
@@ -240,11 +241,18 @@ int main() {
     v = Vector3d(y[7], y[8], y[9]);
     w = Vector3d(y[10], y[11], y[12]);
 
-    std::cout << "After first Step: " << std::endl;
+    std::cout << "After " << step << " Step: " << std::endl;
     print("c", c);
     print("q", q);
     print("v", v);
     print("w", w);
-    exit(0);
+
+    ++step;
+
+    if (step == 50) {
+      exit(0);
+    }
+
+
   }
 }

@@ -1,5 +1,5 @@
 import * as bjs from '@babylonjs/core'
-import { GRAVITY, ITop, TopMaterial } from './ITop';
+import { GRAVITY, ITop, TopMaterial, matMul, quaternionToMatrix } from './ITop';
 import { dyad } from './Tools';
 import { CrossMatrix } from './TippeTop';
 import { PHI } from "./PhiTop";
@@ -11,78 +11,14 @@ type Transform = {
     w: bjs.Vector3
 }
 
-export const quaternionToMatrix = (q: bjs.Quaternion) => {
-    const tx = 2 * q.x;
-    const ty = 2 * q.y;
-    const tz = 2 * q.z;
-    const twx = tx * q.w;
-    const twy = ty * q.w;
-    const twz = tz * q.w;
-    const txx = tx * q.x;
-    const txy = ty * q.x;
-    const txz = tz * q.x;
-    const tyy = ty * q.y;
-    const tyz = tz * q.y;
-    const tzz = tz * q.z;
-    const m = new bjs.Matrix();
-    m.setRowFromFloats(0, 1 - (tyy + tzz), txy - twz, txz + twy, 0);
-    m.setRowFromFloats(1, txy + twz, 1 - (txx + tzz), tyz - twx, 0);
-    m.setRowFromFloats(2, txz - twy, tyz + twx, 1 - (txx + tyy), 0);
-    m.setRowFromFloats(3, 0, 0, 0, 1);
-    return m;
-}
-
 export const quatMul = (a: bjs.Quaternion, b: bjs.Quaternion) => {
     return a.multiply(b);
 }
 
-export const downloadString = (text: string, fileName: string) => {
-    const element = document.createElement('a');
-    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-    element.setAttribute('download', "test.txt");
-    element.style.display = 'none';
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-}
-
-import DataCSV from "../Rattleback.csv?raw"
-
-const DATA : Array<{
-    position: bjs.Vector3,
-    rotation: bjs.Quaternion,
-}> = []
-
-const LINES = DataCSV.split("\n");
-for  (let i = 1; i < LINES.length; i++) {
-    // t, cx, cy, cz, qw, qx, qy, qz
-    const line = LINES[i].split(",");
-    const t = parseFloat(line[0]);
-    const cx = parseFloat(line[1]);
-    const cy = parseFloat(line[2]);
-    const cz = parseFloat(line[3]);
-    const qw = parseFloat(line[4]);
-    const qx = parseFloat(line[5]);
-    const qy = parseFloat(line[6]);
-    const qz = parseFloat(line[7]);
-    const position = new bjs.Vector3(cx, cy, cz);
-    const rotation = new bjs.Quaternion(qx, qy, qz, qw);
-    DATA.push({
-        position,
-        rotation
-    })
-}
-
-
 export class Rattleback extends ITop {
 
-    private c: bjs.Vector3;
     private B0: bjs.Matrix;
     private d: number;
-
-    private rx: number;
-    private ry: number;
-    private rz: number;
 
     constructor(name: string, scene: bjs.Scene) {
 
@@ -159,13 +95,8 @@ export class Rattleback extends ITop {
         )
         mesh.position = position;
         mesh.parent = this;
-        this.c = centerOfMass;
         this.d = d;
-        this.simulationStepsPerFrame = 10;
-
-        this.rx = rx;
-        this.ry = ry;
-        this.rz = rz;
+        this.simulationStepsPerFrame = 50;
 
         this.reset();
     }
@@ -175,18 +106,15 @@ export class Rattleback extends ITop {
         const B_inv = (R.multiply(this.B0.clone().multiply(R.transpose()))).invert();
         B_inv.setRowFromFloats(3, 0, 0, 0, 1);
         // extreme point in y-direction (upwards/downwards)
-        let r = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), B_inv).scale(
+        let r = matMul(B_inv, bjs.Vector3.Up()).scale(
             -1 / Math.sqrt(
                 bjs.Vector3.Dot(
                     bjs.Vector3.Up(),
-                    bjs.Vector3.TransformCoordinates(
-                        bjs.Vector3.Up(),
-                        B_inv
-                    )
+                    matMul(B_inv, bjs.Vector3.Up())
                 )
             )
         )
-        const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), R)
+        const Re3 = matMul(R, bjs.Vector3.Up());
         r = r.add(Re3.scale(this.d))
         return r;
     }
@@ -211,7 +139,7 @@ export class Rattleback extends ITop {
         const wxr = bjs.Vector3.Cross(transform.w, r);
         const wxu = bjs.Vector3.Cross(transform.w, bjs.Vector3.Up());
         const rp = wxr.add(
-            bjs.Vector3.TransformCoordinates(wxu, B_inv).scale(1 / s)
+            matMul(B_inv, wxu).scale(1 / s)
         ).add(
             r.scale(bjs.Vector3.Dot(bjs.Vector3.Up(), wxr) / s)
         )
@@ -227,55 +155,38 @@ export class Rattleback extends ITop {
 
         // R := world matrix
         const R = quaternionToMatrix(transform.q);
-        // const R = new bjs.Matrix();
-        // transform.q.toRotationMatrix(R);
-
-        console.log("R", R);
-
+        
         // I := inertia
         const I = R.multiply(this.momentOfInertia.clone().multiply(R.transpose()));
         // I.setRowFromFloats(3, 0, 0, 0, 1);
-        console.log("I", I)
         const B_inv = R.multiply(this.B0.clone().multiply(R.transpose())).invert();
         // B_inv.setRowFromFloats(3, 0, 0, 0, 1);
-        console.log("B_1", B_inv)
 
         // extreme point in y-direction (upwards/downwards)
-        let r = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), B_inv).scale(
+        let r = matMul(B_inv, bjs.Vector3.Up()).scale(
             -Math.sqrt(
                 bjs.Vector3.Dot(
                     bjs.Vector3.Up(),
-                    bjs.Vector3.TransformCoordinates(
-                        bjs.Vector3.Up(),
-                        B_inv
-                    )
+                    matMul(B_inv, bjs.Vector3.Up())
                 )
             )
         )
-        console.log("r", r)
         let dr = this.drdt(r, B_inv, transform);
-        console.log("dr", dr)
 
-        const Re3 = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), R)
+        const Re3 = matMul(R, bjs.Vector3.Up())
         r = r.add(Re3.scale(this.d))
-        console.log("r", r)
 
         dr = dr.add(bjs.Vector3.Cross(transform.w, Re3).scale(this.d))
-        console.log("dr", dr)
 
         const I_INV = (I.clone().add(dyad(r, r).scale(-this.totalMass)).add(
             bjs.Matrix.Identity().scale(this.totalMass * bjs.Vector3.Dot(r, r))
         )).invert();
         I_INV.setRowFromFloats(3, 0, 0, 0, 1);
-        console.log("I_1", I_INV)
 
         const rxu = bjs.Vector3.Cross(r, bjs.Vector3.Up()).scale(9.81 * this.totalMass);
         const wxIw = bjs.Vector3.Cross(
             transform.w,
-            bjs.Vector3.TransformCoordinates(
-                transform.w,
-                I
-            )
+            matMul(I, transform.w)
         );
         const rxwxdr = bjs.Vector3.Cross(
             r,
@@ -286,23 +197,19 @@ export class Rattleback extends ITop {
         ).scale(this.totalMass);
 
         const u = rxu.subtract(wxIw).subtract(rxwxdr);
-        console.log("u", u)
 
-        const dw = bjs.Vector3.TransformCoordinates(u, I_INV)
-        console.log("dw", dw)
+        const dw = matMul(I_INV, u);
 
-        console.log("w", transform.w)
         const dv = bjs.Vector3.Cross(dw, r).scale(-1).subtract(
             bjs.Vector3.Cross(transform.w, dr)
         );
-        console.log("dv", dv)
+        dv.y = 0;
 
         const dc = transform.v.clone();
-        console.log("dc", dc)
 
         const qw = new bjs.Quaternion(transform.w.x, transform.w.y, transform.w.z, 0);
         const dq = quatMul(qw, transform.q).scale(0.5);
-        console.log("dq", dq)
+        // const dq = quatMul(transform.q, qw).scale(0.5);
 
         return {
             p: dc,
@@ -358,6 +265,7 @@ export class Rattleback extends ITop {
                 v: transform.v.add(k1.v.scale(dt2)),
                 w: transform.w.add(k1.w.scale(dt2))
             }
+            tmp.q.normalize();
             
             const k2 = this.dfdt(tmp)
             tmp = {
@@ -366,6 +274,7 @@ export class Rattleback extends ITop {
                 v: transform.v.add(k2.v.scale(dt2)),
                 w: transform.w.add(k2.w.scale(dt2))
             }
+            tmp.q.normalize();
 
             const k3 = this.dfdt(tmp)
             tmp = {
@@ -374,6 +283,7 @@ export class Rattleback extends ITop {
                 v: transform.v.add(k3.v.scale(dt)),
                 w: transform.w.add(k3.w.scale(dt))
             }
+            tmp.q.normalize();
 
             const k4 = this.dfdt(tmp)
 
@@ -407,6 +317,11 @@ export class Rattleback extends ITop {
 
         // if (s >= 5) return;
 
+        // if (s == 50) return;
+
+        // this.rotate(new bjs.Vector3(1,0,0), 0.01);
+        // return;
+
         dt = 5e-4;
 
         // convert from left handed to right handed coordinate system
@@ -417,9 +332,15 @@ export class Rattleback extends ITop {
             this.rotationQuaternion!.w
         );
 
+        const position = new bjs.Vector3(
+            this.position.x,
+            this.position.y,
+            this.position.z
+        );
+
         const initial: Transform = {
-            q: rotation,
-            p: this.position.clone(),
+            q: rotation.normalizeToNew(),
+            p: position.clone(),
             v: this.velocity.clone(),
             w: this.angularVelocity.clone()
         }
@@ -428,23 +349,24 @@ export class Rattleback extends ITop {
 
         console.log(res);
 
+        res.q.normalize();
+
         this.rotationQuaternion = new bjs.Quaternion(
             res.q.x,
             res.q.y,
             res.q.z,
             res.q.w
         );
-        this.position = res.p;
+        this.position = new bjs.Vector3(
+            res.p.x,
+            res.p.y,
+            res.p.z
+        );
         this.velocity = res.v;
         this.angularVelocity = res.w;
 
-
-        
         s++;
-
     }
 }
 
 let s = 0;
-
-export { }

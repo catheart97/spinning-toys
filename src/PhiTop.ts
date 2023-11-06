@@ -10,7 +10,6 @@ export class PhiTop extends ITop {
     private friction = 0.3;
 
     constructor(name: string, scene: bjs.Scene) {
-
         const mass = 0.25;
         const scale = 0.16848;
 
