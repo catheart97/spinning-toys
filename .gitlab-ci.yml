@@ -1,0 +1,23 @@
+image: node:lts
+
+pages:
+  stage: deploy
+
+  cache:
+    paths:
+    - node_modules/
+
+  script:
+  - npm install
+  - npm i -g vite
+  - vite build --base=$CI_PAGES_URL
+  - echo $CI_PAGES_URL
+  - cp -a dist/. public/
+  - cp public/index.html public/404.html
+
+  artifacts:
+    paths:
+    - public
+
+  only:
+  - main
