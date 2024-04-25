@@ -10,6 +10,7 @@ pages:
   script:
   - npm install
   - npm i -g vite
+  - export NODE_OPTIONS=--max-old-space-size=32768
   - vite build --base=$CI_PAGES_URL
   - echo $CI_PAGES_URL
   - cp -a dist/. public/
