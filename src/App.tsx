@@ -22,21 +22,6 @@ const App = () => {
       camera.setTarget(bjs.Vector3.Zero())
       camera.attachControl(canvas.current, false)
       camera.panningDistanceLimit = 19
-      
-      {
-        // setup lightning and environment 
-        const hdrTexture = new bjs.EquiRectangularCubeTexture(HDR, scene, 1024);
-        scene.environmentTexture = hdrTexture.clone();
-  
-        hdrTexture.coordinatesMode = bjs.Texture.SKYBOX_MODE;
-        const hdrSkybox = bjs.CreateBox("hdrSkyBox", {
-          size: 1000.0
-        }, scene);
-        const hdrMaterial = new bjs.BackgroundMaterial("hdrMaterial", scene);
-        hdrMaterial.backFaceCulling = false;
-        hdrMaterial.reflectionTexture = hdrTexture;
-        hdrSkybox.material = hdrMaterial;
-      }
 
       {
         const ground = bjs.CreateDisc("ground", {
@@ -54,6 +39,52 @@ const App = () => {
       // setup actual scene
       const root = new bjs.TransformNode("sceneRoot", scene)
       const oloid = new Oloid(root)
+      await oloid.init();
+
+      {
+        // setup light and shadows
+        const light = new bjs.DirectionalLight("light", new bjs.Vector3(0, -1, 0), scene);
+        light.intensity = 2;
+        light.position = new bjs.Vector3(0, 10, 0);
+        
+        const shadowGenerator = new bjs.CascadedShadowGenerator(1024, light);
+        shadowGenerator.usePercentageCloserFiltering = false;
+        shadowGenerator.filter = bjs.ShadowGenerator.FILTER_PCF;
+        shadowGenerator.forceBackFacesOnly = false;
+        shadowGenerator.normalBias = 0.0175;
+        shadowGenerator.bias = 0.006;
+        shadowGenerator.filteringQuality = bjs.ShadowGenerator.QUALITY_HIGH;
+        shadowGenerator.shadowMaxZ = 100;
+        shadowGenerator.depthClamp = false;
+        shadowGenerator.lambda = 0.5;
+        shadowGenerator.stabilizeCascades = false;
+        shadowGenerator.penumbraDarkness = 0;
+        shadowGenerator.cascadeBlendPercentage = 0.1;
+        shadowGenerator.darkness = .1;
+        shadowGenerator.numCascades = 4;
+        shadowGenerator.useContactHardeningShadow = false;
+
+        scene.meshes.forEach(mesh => {
+          shadowGenerator.addShadowCaster(mesh);
+          mesh.receiveShadows = true;
+        });
+      }
+
+      {
+        // setup lightning and environment 
+        const hdrTexture = new bjs.EquiRectangularCubeTexture(HDR, scene, 1024);
+        scene.environmentTexture = hdrTexture.clone();
+        scene.environmentIntensity = 0.5;
+  
+        hdrTexture.coordinatesMode = bjs.Texture.SKYBOX_MODE;
+        const hdrSkybox = bjs.CreateBox("hdrSkyBox", {
+          size: 1000.0
+        }, scene);
+        const hdrMaterial = new bjs.BackgroundMaterial("hdrMaterial", scene);
+        hdrMaterial.backFaceCulling = false;
+        hdrMaterial.reflectionTexture = hdrTexture;
+        hdrSkybox.material = hdrMaterial;
+      }
 
       scene.debugLayer.show();
       

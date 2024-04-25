@@ -23,7 +23,9 @@ export class Oloid {
         this.core.rotationQuaternion = new bjs.Quaternion();
         this.core.parent = root;
 
-        // visualize circles as children of core
+        const circleMaterial = new bjs.StandardMaterial("circleMaterial", this.core.getScene())
+        circleMaterial.diffuseColor = new bjs.Color3(0, 0, 0)
+        circleMaterial.backFaceCulling = false;
         const circle1 = bjs.CreateDisc(
             "circle1", {
                 radius: 1
@@ -31,18 +33,17 @@ export class Oloid {
         )
         circle1.rotation.x = Math.PI / 2;
         circle1.position = this.circleOffsets[0]
+        circle1.material = circleMaterial;
         circle1.parent = this.core;
-
         const circle2 = bjs.CreateDisc(
             "circle2", {
-                radius: 1
+                radius: 1,
             }, this.core.getScene()
         )
         circle2.rotation.z = Math.PI / 2;
         circle2.position = this.circleOffsets[1]
+        circle2.material = circleMaterial;
         circle2.parent = this.core;
-
-        this.init();
     }
 
     async init() {
@@ -55,8 +56,9 @@ export class Oloid {
         });
 
         this.core.getScene().onBeforeRenderObservable.add(() => {
-            this.core.rotate(bjs.Vector3.Left(), 0.01);
-            this.core.rotate(bjs.Vector3.Right(), 0.005);
+            this.core.rotate(bjs.Vector3.Left(), 0.05);
+            this.core.rotate(bjs.Vector3.Right(), 0.01);
+            this.core.rotate(bjs.Vector3.Up(), 0.0001);
             this.core.position.y = this.contactPoint().y;
         });
     }
