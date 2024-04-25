@@ -70,20 +70,16 @@ export class Oloid {
 
         const upInCore = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), iRotMatrix)
 
-        const n1 = this.circleNormals[0].clone();
+        const n1 = this.circleNormals[0]
         const c1 = n1.cross(n1.cross(upInCore)).normalize().add(this.circleOffsets[0])
 
-        const n2 = this.circleNormals[1].clone();
+        const n2 = this.circleNormals[1]
         const c2 = n2.cross(n2.cross(upInCore)).normalize().add(this.circleOffsets[1])
-
-        const cw = [
-            bjs.Vector3.TransformCoordinates(c1, rotMatrix),
-            bjs.Vector3.TransformCoordinates(c2, rotMatrix),
-            bjs.Vector3.TransformCoordinates(c1.negate(), rotMatrix),
-            bjs.Vector3.TransformCoordinates(c2.negate(), rotMatrix),
-        ]
         
-        // return cw with lowest y 
-        return cw.reduce((a, b) => a.y < b.y ? a : b).negate()
+        const c1w = bjs.Vector3.TransformCoordinates(c1, rotMatrix)
+        const c2w = bjs.Vector3.TransformCoordinates(c2, rotMatrix)
+
+        const cw = [ c1w, c2w, c1w.negate(), c2w.negate() ]
+        return cw.reduce((a, b) => a.y > b.y ? a : b)
     }
 }
