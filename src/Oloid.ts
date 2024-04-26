@@ -1,66 +1,58 @@
 import * as bjs from '@babylonjs/core';
 import '@babylonjs/loaders'
+import { IUpdateable } from './IUpdateable';
 
-import OloidMesh from "../public/oloid_lp.glb"
-
-export class Oloid {
+export class Oloid implements IUpdateable {
 
     circleNormals = [
         new bjs.Vector3(0, 1, 0),
-        new bjs.Vector3(0, 0, -1),
+        new bjs.Vector3(0, 0, 1),
     ]
 
     circleOffsets = [
-        new bjs.Vector3(-.5, 0, 0),
         new bjs.Vector3(0.5, 0, 0),
+        new bjs.Vector3(-.5, 0, 0),
     ]
-    
+
     core: bjs.TransformNode
 
     // all transforms
-    constructor(private root: bjs.TransformNode) {
-        this.core = new bjs.TransformNode("core", root.getScene())
+    constructor(mesh: bjs.Mesh) {
+        mesh.getChildMeshes(false).forEach(m => {
+            if (m.material) {
+                m.material.wireframe = true
+            }
+        });
+
+        this.core = new bjs.TransformNode("core", mesh.getScene())
         this.core.rotationQuaternion = new bjs.Quaternion();
-        this.core.parent = root;
+        mesh.parent = this.core;
 
         const circleMaterial = new bjs.StandardMaterial("circleMaterial", this.core.getScene())
         circleMaterial.diffuseColor = new bjs.Color3(0, 0, 0)
         circleMaterial.backFaceCulling = false;
-        const circle1 = bjs.CreateDisc(
-            "circle1", {
+        {
+            const circle = bjs.CreateDisc(
+                "circle", {
                 radius: 1
             }, this.core.getScene()
-        )
-        circle1.rotation.x = Math.PI / 2;
-        circle1.position = this.circleOffsets[0]
-        circle1.material = circleMaterial;
-        circle1.parent = this.core;
-        const circle2 = bjs.CreateDisc(
-            "circle2", {
-                radius: 1,
+            )
+            circle.rotation.x = Math.PI / 2;
+            circle.position = this.circleOffsets[0].negate();
+            circle.material = circleMaterial;
+            circle.parent = this.core;
+        }
+        {
+            const circle = bjs.CreateDisc(
+                "circle", {
+                radius: 1
             }, this.core.getScene()
-        )
-        circle2.rotation.z = Math.PI / 2;
-        circle2.position = this.circleOffsets[1]
-        circle2.material = circleMaterial;
-        circle2.parent = this.core;
-    }
-
-    async init() {
-        const res = await bjs.SceneLoader.ImportMeshAsync("", OloidMesh, "", this.root.getScene())
-        res.meshes.forEach(mesh => {
-            mesh.setParent(this.core)
-            mesh.getChildMeshes(false).forEach(c => {
-                c.material.wireframe = true;
-            })
-        });
-
-        this.core.getScene().onBeforeRenderObservable.add(() => {
-            this.core.rotate(bjs.Vector3.Left(), 0.05);
-            this.core.rotate(bjs.Vector3.Right(), 0.01);
-            this.core.rotate(bjs.Vector3.Up(), 0.0001);
-            this.core.position.y = this.contactPoint().y;
-        });
+            )
+            circle.rotation.z = Math.PI / 2;
+            circle.position = this.circleOffsets[1].negate();
+            circle.material = circleMaterial;
+            circle.parent = this.core;
+        }
     }
 
     contactPoint() {
@@ -68,18 +60,32 @@ export class Oloid {
         this.core.rotationQuaternion.toRotationMatrix(rotMatrix);
         const iRotMatrix = rotMatrix.invert()
 
-        const upInCore = bjs.Vector3.TransformCoordinates(bjs.Vector3.Up(), iRotMatrix)
+        const normalsInWorld = this.circleNormals.map(n => bjs.Vector3.TransformCoordinates(n, iRotMatrix))
+        const offsetsInWorld = this.circleOffsets.map(o => bjs.Vector3.TransformCoordinates(o, iRotMatrix))
 
-        const n1 = this.circleNormals[0]
-        const c1 = n1.cross(n1.cross(upInCore)).normalize().add(this.circleOffsets[0])
+        const c1w = this.contactPointOnCircle(normalsInWorld[0], bjs.Vector3.Up(), offsetsInWorld[0])
+        const c2w = this.contactPointOnCircle(normalsInWorld[1], bjs.Vector3.Up(), offsetsInWorld[1])
 
-        const n2 = this.circleNormals[1]
-        const c2 = n2.cross(n2.cross(upInCore)).normalize().add(this.circleOffsets[1])
-        
-        const c1w = bjs.Vector3.TransformCoordinates(c1, rotMatrix)
-        const c2w = bjs.Vector3.TransformCoordinates(c2, rotMatrix)
-
-        const cw = [ c1w, c2w, c1w.negate(), c2w.negate() ]
+        const cw = [
+            c1w, 
+            c1w.negate(), 
+            c2w,
+            c2w.negate()
+        ]
         return cw.reduce((a, b) => a.y > b.y ? a : b)
+    }
+
+    private contactPointOnCircle(n: bjs.Vector3, up: bjs.Vector3, offset: bjs.Vector3) {
+        return n.cross(n.cross(up)).normalize().add(offset)
+    }
+    
+    // IUpdateable
+    async init() { }
+
+    // IUpdateable
+    update(dt: number) {
+        this.core.rotate(bjs.Vector3.Left(), 0.01);
+        this.core.rotate(bjs.Vector3.Forward(), 0.01);
+        this.core.position.y = this.contactPoint().y;
     }
 }

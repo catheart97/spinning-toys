@@ -10,8 +10,12 @@ import WoodAlbedo from "../public/worn_planks_diff_2k.jpg"
 import WoodNormal from "../public/worn_planks_nor_gl_2k.jpg"
 import WoodRoughness from "../public/worn_planks_rough_2k.jpg"
 
+import OloidMesh from "../public/oloid_lp.glb"
+import { IUpdateable } from './IUpdateable'
+
 const App = () => {
   const canvas = React.useRef<HTMLCanvasElement>()
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     (async () => {
@@ -36,15 +40,29 @@ const App = () => {
         ground.material = groundMaterial;
       }
 
-      // setup actual scene
-      const root = new bjs.TransformNode("sceneRoot", scene)
-      const oloid = new Oloid(root)
-      await oloid.init();
+      const updateables: IUpdateable[] = []
+      {
+        // in digitalmuseum this would be a reference to the mesh id
+        const res = await bjs.SceneLoader.ImportMeshAsync("", OloidMesh, "", scene)
+        const oloidMesh = res.meshes.filter(m => m.name == "__root__")[0] as bjs.Mesh
+  
+        const oloid = new Oloid(oloidMesh)
+        updateables.push(oloid)
+      }
+
+      await Promise.all(updateables.map(u => u.init()));
+
+      {
+        scene.onBeforeRenderObservable.add(() => {
+          const dt = engine.getDeltaTime() / 1000
+          updateables.forEach(u => u.update(dt))
+        });
+      }
 
       {
         // setup light and shadows
         const light = new bjs.DirectionalLight("light", new bjs.Vector3(0, -1, 0), scene);
-        light.intensity = 2;
+        light.intensity = 4;
         light.position = new bjs.Vector3(0, 10, 0);
         
         const shadowGenerator = new bjs.CascadedShadowGenerator(1024, light);
@@ -74,7 +92,7 @@ const App = () => {
         // setup lightning and environment 
         const hdrTexture = new bjs.EquiRectangularCubeTexture(HDR, scene, 1024);
         scene.environmentTexture = hdrTexture.clone();
-        scene.environmentIntensity = 0.5;
+        scene.environmentIntensity = 1;
   
         hdrTexture.coordinatesMode = bjs.Texture.SKYBOX_MODE;
         const hdrSkybox = bjs.CreateBox("hdrSkyBox", {
@@ -87,10 +105,13 @@ const App = () => {
       }
 
       scene.debugLayer.show();
-      
       engine.runRenderLoop(() => {
         scene.render()
       });
+      
+      scene.onReadyObservable.addOnce(() => {
+        setLoading(false)
+      })
     })()
 
     return () => {
@@ -99,9 +120,16 @@ const App = () => {
   }, [])
 
   return (
-    <div className='relative bg-black h-[-webkit-fill-available] h-screen'>
-      <canvas ref={canvas} className='w-full h-[inherit]'></canvas>
-    </div>
+    <>
+      <div className='fixed inset-0 z-50 bg-black flex items-center justify-center transition-opacity ease-in-out duration-200 pointer-events-none' style={{
+        opacity: loading ? 1 : 0
+      }}>
+        <i className='text-white bi bi-arrow-repeat text-6xl animate-spin'></i>
+      </div>
+      <div className='relative bg-black h-[-webkit-fill-available] h-screen'>
+        <canvas ref={canvas} className='w-full h-[inherit]'></canvas>
+      </div>
+    </>
   )
 }
 
