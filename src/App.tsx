@@ -2,7 +2,7 @@ import * as React from 'react'
 import * as bjs from '@babylonjs/core'
 import '@babylonjs/inspector'
 
-import {Oloid} from './Oloid'
+import { Oloid } from './Oloid'
 
 import HDR from "../public/symmetrical_garden_02_4k.jpeg"
 
@@ -11,7 +11,9 @@ import WoodNormal from "../public/worn_planks_nor_gl_2k.jpg"
 import WoodRoughness from "../public/worn_planks_rough_2k.jpg"
 
 import OloidMesh from "../public/oloid_lp.glb"
-import { IUpdateable } from './IUpdateable'
+import PhiTopMesh from "../public/phitop.glb"
+import { IUpdateable } from './Utility'
+import { PhiTop } from './PhiTop'
 
 const App = () => {
   const canvas = React.useRef<HTMLCanvasElement>()
@@ -22,10 +24,21 @@ const App = () => {
       const engine = new bjs.Engine(canvas.current, true)
       const scene = new bjs.Scene(engine)
       scene.clearColor = new bjs.Color4(0, 0, 0, 0)
-      const camera = new bjs.ArcRotateCamera('camera', 0, 0, 10, bjs.Vector3.Zero(), scene)
+
+      const camera = new bjs.ArcRotateCamera('camera', Math.PI / 2, 0, 10, bjs.Vector3.Zero(), scene)
       camera.setTarget(bjs.Vector3.Zero())
       camera.attachControl(canvas.current, false)
-      camera.panningDistanceLimit = 19
+      camera.panningDistanceLimit = 2
+
+      // camera.mode = bjs.Camera.ORTHOGRAPHIC_CAMERA
+      // scene.onBeforeRenderObservable.add(() => {
+      //   const aspect = engine.getRenderWidth() / engine.getRenderHeight()
+
+      //   camera.orthoBottom = -5
+      //   camera.orthoTop = 5
+      //   camera.orthoLeft = -5 * aspect
+      //   camera.orthoRight = 5 * aspect
+      // })
 
       {
         const ground = bjs.CreateDisc("ground", {
@@ -41,19 +54,41 @@ const App = () => {
       }
 
       const updateables: IUpdateable[] = []
+
+      /// ! OLOID 
+      // {
+      //   const res = await bjs.SceneLoader.ImportMeshAsync("", OloidMesh, "", scene)
+      //   const oloidMesh = res.meshes.filter(m => m.name == "__root__")[0] as bjs.Mesh
+
+      //   const oloid = new Oloid(oloidMesh)
+      //   updateables.push(oloid)
+      // }
+
+      /// ! PHITOP
       {
-        // in digitalmuseum this would be a reference to the mesh id
-        const res = await bjs.SceneLoader.ImportMeshAsync("", OloidMesh, "", scene)
-        const oloidMesh = res.meshes.filter(m => m.name == "__root__")[0] as bjs.Mesh
-  
-        const oloid = new Oloid(oloidMesh)
-        updateables.push(oloid)
+        const res = await bjs.SceneLoader.ImportMeshAsync("", PhiTopMesh, "", scene)
+        const phitopMesh = res.meshes.filter(m => m.name == "__root__")[0] as bjs.Mesh
+
+        const phitop = new PhiTop(phitopMesh)
+        updateables.push(phitop)
+
+        canvas.current.addEventListener('click', () => {
+          const ray = scene.createPickingRay(scene.pointerX, scene.pointerY, bjs.Matrix.Identity(), camera)
+          const pick = scene.pickWithRay(ray)
+          if (pick.pickedMesh == phitop.mesh) {
+            console.log(pick);
+            const mesh = pick.pickedMesh
+            if (mesh == phitop.mesh) {
+              phitop.applyAngularAcceleration(
+                new bjs.Vector3(0, 20 * Math.PI, 0)
+              )
+            }
+          }
+        });
       }
 
-      await Promise.all(updateables.map(u => u.init()));
-
       {
-        scene.onBeforeRenderObservable.add(() => {
+        scene.onAfterRenderObservable.add(() => {
           const dt = engine.getDeltaTime() / 1000
           updateables.forEach(u => u.update(dt))
         });
@@ -64,7 +99,7 @@ const App = () => {
         const light = new bjs.DirectionalLight("light", new bjs.Vector3(0, -1, 0), scene);
         light.intensity = 4;
         light.position = new bjs.Vector3(0, 10, 0);
-        
+
         const shadowGenerator = new bjs.CascadedShadowGenerator(1024, light);
         shadowGenerator.usePercentageCloserFiltering = false;
         shadowGenerator.filter = bjs.ShadowGenerator.FILTER_PCF;
@@ -93,7 +128,7 @@ const App = () => {
         const hdrTexture = new bjs.EquiRectangularCubeTexture(HDR, scene, 1024);
         scene.environmentTexture = hdrTexture.clone();
         scene.environmentIntensity = 1;
-  
+
         hdrTexture.coordinatesMode = bjs.Texture.SKYBOX_MODE;
         const hdrSkybox = bjs.CreateBox("hdrSkyBox", {
           size: 1000.0
@@ -108,7 +143,7 @@ const App = () => {
       engine.runRenderLoop(() => {
         scene.render()
       });
-      
+
       scene.onReadyObservable.addOnce(() => {
         setLoading(false)
       })
