@@ -1,51 +1,76 @@
 import * as bjs from '@babylonjs/core';
 import '@babylonjs/loaders'
-import { DiagMatrix, IUpdateable, Transform } from './Utility';
+import { CrossMatrix, DiagMatrix, IUpdateable, Transform, dyad, euler, vecMul, rk4, matMul } from './Utility';
 
 export const PHI = (1 + Math.sqrt(5)) / 2;
-export const GRAVITY = new bjs.Vector3(0, -9.81, 0);
+export const GRAVITY = 9.81
 
 export class PhiTop implements IUpdateable {
     private simulate: boolean = false;
-    protected friction: number = 0.6;
-    protected mass: number = 0.25
-    public mesh: bjs.Mesh;
+    protected friction: number = 0.2;
+    protected mass: number = 0.8
+    public mesh: bjs.TransformNode;
     protected momentOfInertia: bjs.Matrix = bjs.Matrix.Identity();
 
     protected angularVelocity: bjs.Vector3 = bjs.Vector3.Zero();
     protected velocity: bjs.Vector3 = bjs.Vector3.Zero();
 
-    protected addCustomTorque: boolean = true;
-
     public simulationStepsPerFrame: number = 100;
+
+    protected B0: bjs.Matrix;
 
     constructor(private root: bjs.TransformNode) {
         this.mesh = this.root.getChildMeshes()[0] as bjs.Mesh;
+
         this.mesh.rotationQuaternion = bjs.Quaternion.Identity();
         this.mass = 0.25;
         const tx = this.mass / 5.0 * (PHI * PHI + 1.0);
         const ty = this.mass / 5.0 * 2.0;
-        const tz = this.mass / 5.0 * (1.0 + PHI * PHI);
+        const tz = tx;
         this.momentOfInertia = new bjs.Matrix();
         this.momentOfInertia.setRowFromFloats(0, tx, 0, 0, 0);
         this.momentOfInertia.setRowFromFloats(1, 0, ty, 0, 0);
         this.momentOfInertia.setRowFromFloats(2, 0, 0, tz, 0);
         this.momentOfInertia.setRowFromFloats(3, 0, 0, 0, 1);
 
+        this.B0 = new bjs.Matrix();
+        this.B0.setRowFromFloats(0, 1, 0, 0, 0);
+        this.B0.setRowFromFloats(1, 0, 1 / (PHI * PHI), 0, 0);
+        this.B0.setRowFromFloats(2, 0, 0, 1, 0);
+        this.B0.setRowFromFloats(3, 0, 0, 0, 1);
+
+        // show axis on mesh
+        const axes = new bjs.AxesViewer(this.mesh.getScene());
+        axes.xAxis.parent = this.mesh;
+        axes.yAxis.parent = this.mesh;
+        axes.zAxis.parent = this.mesh;
+
+        root.getScene().getEngine().getRenderingCanvas()!.addEventListener('keydown', (e) => {
+            if (e.key == ' ') {
+                this.simulate = !this.simulate;
+                console.log(this.simulate, this.mesh.position, this.mesh.rotationQuaternion);
+            } else if (e.key == 's') {
+                this.applyAngularAcceleration(
+                    new bjs.Vector3(0, 5 * Math.PI, 0)
+                )
+            }
+        });
+
         this.reset();
     }
 
     reset() {
         this.mesh.rotationQuaternion = bjs.Quaternion.RotationAxis(
-            bjs.Vector3.Forward(), Math.PI / 2 + 0.1
+            bjs.Vector3.Forward(), Math.PI / 2 // + 0.1
         )
+        // this.mesh.rotationQuaternion = bjs.Quaternion.Identity();
         this.mesh.position = bjs.Vector3.Zero();
         this.velocity = bjs.Vector3.Zero();
         this.angularVelocity = bjs.Vector3.Zero();
 
         const world = new bjs.Matrix();
         this.mesh.rotationQuaternion!.toRotationMatrix(world);
-        const pWorld = this.contactPoint(world);
+        const pWorld = this.r(world);
         this.mesh.position.y = -pWorld.y;
     }
 
@@ -53,36 +78,89 @@ export class PhiTop implements IUpdateable {
         this.angularVelocity.addInPlace(angularAcceleration);
     }
 
-    contactPoint(worldRotation: bjs.Matrix): bjs.Vector3 {
-        let u = worldRotation.transpose().getRow(1)!.toVector3()!;
-        let p = new bjs.Vector3(-u.x, -u.y * PHI * PHI, -u.z);
-        p = p.scale(Math.sqrt(1 / ((p.x * p.x) + (p.y * p.y / (PHI * PHI)) + (p.z * p.z))))
-        return bjs.Vector3.TransformCoordinates(p, worldRotation);
+    r(R: bjs.Matrix, B_inv? : bjs.Matrix): bjs.Vector3 {
+        B_inv = B_inv ?? (R.multiply(this.B0.clone().multiply(R.transpose()))).invert();
+        let r = vecMul(B_inv, bjs.Vector3.Up()).scale(
+            -1 / Math.sqrt(
+                bjs.Vector3.Dot(
+                    bjs.Vector3.Up(),
+                    vecMul(B_inv, bjs.Vector3.Up())
+                )
+            )
+        )
+        return r;
     }
 
-    customTorque(
-        dt: number,
-        Fr: bjs.Vector3,
-        _Fg: bjs.Vector3,
-        _Fn: bjs.Vector3,
-        pWorld: bjs.Vector3,
-        _inertia: bjs.Matrix
-    ): bjs.Vector3 {
-        const torque = new bjs.Vector3(0, 0, 0);
-        // applies damping only when the object is not moving
+    dr(r: bjs.Vector3, B_inv: bjs.Matrix, transform: Transform) {
+        // reoccuring terms
+        // 1 / sqrt(u^T * r)
+        const s = 1 / -bjs.Vector3.Dot(bjs.Vector3.Up(), r);
+        // (w x r)
+        const wxr = bjs.Vector3.Cross(transform.angularVelocity, r);
+        // (w x u)
+        const wxu = bjs.Vector3.Cross(transform.angularVelocity, bjs.Vector3.Up());
+        // (w x r) - B^-1 (w x u) / (u^T * r) - r * u^T(w x r)
+        const rp = wxr.add(
+            vecMul(B_inv, wxu).scale(s)
+        ).add(
+            r.scale(bjs.Vector3.Dot(bjs.Vector3.Up(), wxr) * s)
+        )
+        return rp;
+    }
 
-        if (Math.abs(pWorld.dot(bjs.Vector3.Up())) > 0.9)
+    df(t: Transform) {
+        const R = new bjs.Matrix();
+        t.rotation.toRotationMatrix(R);
+        
+        const B_inv = R.multiply(this.B0.clone().multiply(R.transpose())).invert();
+        const r = this.r(R, B_inv);
+        const dr = this.dr(r, B_inv, t);
+        const I = R.multiply(this.momentOfInertia.clone().multiply(R.transpose()));
+        
+        const rxu = bjs.Vector3.Cross(r, bjs.Vector3.Up());
 
-        if (Fr.length() < 0.05 && this.addCustomTorque) {
-            torque.addInPlace(new bjs.Vector3(
-                dt * this.angularVelocity.length() * 10, 0, 0
-            ));
+        // reoccuring terms
+        const wxr = bjs.Vector3.Cross(t.angularVelocity, r);
+        const wxdr = bjs.Vector3.Cross(t.angularVelocity, dr);
+        const uTwxdr = bjs.Vector3.Dot(bjs.Vector3.Up(), wxdr);
+        const vpwxrµ = t.velocity.add(wxr).scale(this.friction);
+        
+        // (I + m * [rxu] * [rxu]^T)^-1
+        const t1 = I.add(dyad(rxu, rxu).scale(this.mass)).invert();
+        // m * g - m * u^T(w x dr) * rxu
+        const t3 = rxu.scale(GRAVITY * this.mass - this.mass * uTwxdr)
+        // w x (I * w)
+        const t4 = bjs.Vector3.Cross(t.angularVelocity, vecMul(I, t.angularVelocity));
+        // (r x (v + w x r)) * µ
+        const t5 = bjs.Vector3.Cross(r, vpwxrµ);
+        // (m * g - m * u^T(w x dr) * rxu - w x (I * w) - (r x (v + w x r)) * µ)
+        const t6 = t3.subtract(t4).subtract(t5);
+        // (I + m * [rxu] * [rxu]^T)^-1 * (m * g - m * u^T(w x dr) * rxu - w x (I * w) - (r x (v + w x r)) * µ)
+        const dw = vecMul(t1, t6);
+        
+        // m * (g - u^T(dw x r) - u^T(w x dr)
+        const dwxr = bjs.Vector3.Cross(dw, r);
+        const uTdwxr = bjs.Vector3.Dot(bjs.Vector3.Up(), dwxr);
+        const lambda = this.mass * (GRAVITY - uTdwxr - uTwxdr);
+
+        // 1/m * (-m * g * u + lambda * u - µ * (v + w x r))
+        const dv = bjs.Vector3.Up().scale(-GRAVITY * this.mass + lambda).subtract(vpwxrµ).scale(1 / this.mass);
+
+        const qw = new bjs.Quaternion(t.angularVelocity.x, t.angularVelocity.y, t.angularVelocity.z, 0);
+        const dq = qw.multiply(t.rotation).scale(0.5);
+
+        return {
+            position: t.velocity,
+            rotation: dq,
+            velocity: dv,
+            angularVelocity: dw
         }
-        return torque;
     }
 
     update(dt_: number): void {
-        if (!this.simulate) { this.simulate = true; return; }
+        if (!this.simulate) { 
+            return; 
+        }
 
         if (isNaN(this.angularVelocity.length())) {
             this.reset();
@@ -90,73 +168,27 @@ export class PhiTop implements IUpdateable {
         }
 
         const dt = dt_ / this.simulationStepsPerFrame;
+
         for (let i = 0; i < this.simulationStepsPerFrame; ++i) {
+            const initial: Transform = {
+                rotation: this.mesh.rotationQuaternion!.normalizeToNew(),
+                position: this.mesh.position.clone(),
+                velocity: this.velocity.clone(),
+                angularVelocity: this.angularVelocity.clone()
+            }
+    
+            const res = rk4((t) => this.df(t), initial, dt);        
 
-            const world = new bjs.Matrix();
-            this.mesh.rotationQuaternion!.toRotationMatrix(world);
+            this.mesh.rotationQuaternion = res.rotation;
+            this.mesh.position = res.position;
+            this.velocity = res.velocity;
+            this.angularVelocity = res.angularVelocity;
 
-            // compute contact point
-            const pWorld = this.contactPoint(world);
-
-            // gravity force
-            const Fg = GRAVITY.clone().scale(this.mass);
-
-            // friction force
-            const Fr = this.velocity.add(
-                bjs.Vector3.Cross(pWorld, this.angularVelocity)
-            ).scale(-this.friction);
-
-            // normal force
-            let Fn = new bjs.Vector3(
-                0,
-                (
-                    (
-                        (
-                            (-pWorld.y - this.mesh.position.y) / dt
-                        ) - this.velocity.y
-                    ) * this.mass
-                ) / dt - Fg.y - Fr.y,
-                0
-            );
-
-            // compute torques
-            const torque = bjs.Vector3.Cross(Fn.scale(-1).add(Fr), pWorld);
-            const inertia = world.transpose().multiply(this.momentOfInertia.clone()).multiply(world);
-
-            if (this.addCustomTorque) torque.addInPlace(this.customTorque(dt, Fr, Fg, Fn, pWorld, inertia));
-
-            // compute accelerations
-            const acceleration = Fg.add(Fn).add(Fr).scale(1 / this.mass);
-            const coreAcc = this.mesh.position.clone().scale(-1);
-            coreAcc.y = 0;
-            const angularAcceleration = bjs.Vector3.TransformCoordinates(
-                torque.subtract(
-                    bjs.Vector3.Cross(
-                        this.angularVelocity,
-                        bjs.Vector3.TransformCoordinates(
-                            this.angularVelocity,
-                            inertia
-                        )
-                    )
-                ),
-                inertia.clone().invert()
-            )
-
-            // integrate using euler
-            this.angularVelocity.addInPlace(angularAcceleration.scale(dt));
-            this.velocity.addInPlace(acceleration.scale(dt));
-
-            this.mesh.position.addInPlace(this.velocity.scale(dt));
-            this.mesh.position.addInPlace(coreAcc.scale(dt));
-            this.mesh.rotationQuaternion = bjs.Quaternion.RotationAxis(
-                this.angularVelocity.normalizeToNew(),
-                this.angularVelocity.length() * dt
-            ).multiplyInPlace(this.mesh.rotationQuaternion!);
-
+            // const R = new bjs.Matrix();
+            // this.mesh.rotationQuaternion!.toRotationMatrix(R);
+            // this.mesh.position.y = -this.r(R).y;
         }
 
-
         this.angularVelocity.scaleInPlace(0.999);
-        console.log(this.angularVelocity.length());
     }
 }

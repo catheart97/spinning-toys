@@ -76,11 +76,10 @@ const App = () => {
           const ray = scene.createPickingRay(scene.pointerX, scene.pointerY, bjs.Matrix.Identity(), camera)
           const pick = scene.pickWithRay(ray)
           if (pick.pickedMesh == phitop.mesh) {
-            console.log(pick);
             const mesh = pick.pickedMesh
             if (mesh == phitop.mesh) {
               phitop.applyAngularAcceleration(
-                new bjs.Vector3(0, 20 * Math.PI, 0)
+                new bjs.Vector3(0, Math.PI, 0)
               )
             }
           }

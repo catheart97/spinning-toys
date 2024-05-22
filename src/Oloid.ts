@@ -99,7 +99,7 @@ export class Oloid implements IUpdateable {
         ]
         cs.sort((a, b) => b[1] - a[1]) // sort such that smalles csp value is first
 
-        if (Math.abs(cs[0][1] - cs[1][1]) < 0.01) {
+        if (Math.abs(cs[0][1] - cs[1][1]) < 0.001) {
             return [ 
                 bjs.Vector3.TransformCoordinates(cs[0][0], rotMatrix), 
                 bjs.Vector3.TransformCoordinates(cs[1][0], rotMatrix) 

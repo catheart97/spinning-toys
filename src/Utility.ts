@@ -4,6 +4,15 @@ export interface IUpdateable {
     update(dt: number): void
 }
 
+export const CrossMatrix = (v: bjs.Vector3) : bjs.Matrix => {
+    return bjs.Matrix.FromArray([
+        0, -v.z, v.y, 0,
+        v.z, 0, -v.x, 0,
+        -v.y, v.x, 0, 0,
+        0, 0, 0, 1
+    ])
+}
+
 export const DiagMatrix = (x : number, y : number, z : number) : bjs.Matrix => {
     const mat = bjs.Matrix.Identity()
     mat.setRowFromFloats(0, x, 0, 0, 0)
@@ -13,11 +22,31 @@ export const DiagMatrix = (x : number, y : number, z : number) : bjs.Matrix => {
     return mat;
 }
 
+export const vecMul = (a: bjs.Matrix, v: bjs.Vector3) => {
+    const res = new bjs.Vector3();
+    res.x = a.m[0] * v.x + a.m[1] * v.y + a.m[2] * v.z;
+    res.y = a.m[4] * v.x + a.m[5] * v.y + a.m[6] * v.z;
+    res.z = a.m[8] * v.x + a.m[9] * v.y + a.m[10] * v.z;
+    return res;
+}
+
+export const matMul = (a: bjs.Matrix, b: bjs.Matrix) => {
+    return b.multiply(a);
+};
+
+export const dyad = (a: bjs.Vector3, b: bjs.Vector3) => {
+    return bjs.Matrix.FromArray([
+        a.x * b.x, a.x * b.y, a.x * b.z, 0,
+        a.y * b.x, a.y * b.y, a.y * b.z, 0,
+        a.z * b.x, a.z * b.y, a.z * b.z, 0,
+        0, 0, 0, 1
+    ])
+}
 
 export type Transform = {
     position: bjs.Vector3,
     rotation: bjs.Quaternion,
-    veloctiy: bjs.Vector3,
+    velocity: bjs.Vector3,
     angularVelocity: bjs.Vector3
 }
 
@@ -31,7 +60,14 @@ export const quaternionToMatrix = (q: bjs.Quaternion) => {
 }
 
 export const euler = (dfdt: (t: Transform) => Transform, transform: Transform, dt: number) : Transform => {
-    return dfdt(transform);
+    const k = dfdt(transform);
+    return {
+        rotation: transform.rotation.add(k.rotation.scale(dt)),
+        position: transform.position.add(k.position.scale(dt)),
+        velocity: transform.velocity.add(k.velocity.scale(dt)),
+        angularVelocity: transform.angularVelocity.add(k.angularVelocity.scale(dt))
+    
+    }
 }
 
 export const heun = (dfdt: (t: Transform) => Transform, transform: Transform, dt: number) : Transform => {
@@ -39,7 +75,7 @@ export const heun = (dfdt: (t: Transform) => Transform, transform: Transform, dt
     const k2 = dfdt({
         rotation: transform.rotation.add(k1.rotation.scale(dt)),
         position: transform.position.add(k1.position.scale(dt)),
-        veloctiy: transform.veloctiy.add(k1.veloctiy.scale(dt)),
+        velocity: transform.velocity.add(k1.velocity.scale(dt)),
         angularVelocity: transform.angularVelocity.add(k1.angularVelocity.scale(dt))
     })
 
@@ -50,8 +86,8 @@ export const heun = (dfdt: (t: Transform) => Transform, transform: Transform, dt
         position: transform.position.add(
             k1.position.add(k2.position).scale(dt / 2)
         ),
-        veloctiy: transform.veloctiy.add(
-            k1.veloctiy.add(k2.veloctiy).scale(dt / 2)
+        velocity: transform.velocity.add(
+            k1.velocity.add(k2.velocity).scale(dt / 2)
         ),
         angularVelocity: transform.angularVelocity.add(
             k1.angularVelocity.add(k2.angularVelocity).scale(dt / 2)
@@ -69,7 +105,7 @@ export const rk4 = (dfdt: (t: Transform) => Transform, transform: Transform, dt:
     let tmp : Transform = {
         rotation: transform.rotation.add(k1.rotation.scale(dt2)),
         position: transform.position.add(k1.position.scale(dt2)),
-        veloctiy: transform.veloctiy.add(k1.veloctiy.scale(dt2)),
+        velocity: transform.velocity.add(k1.velocity.scale(dt2)),
         angularVelocity: transform.angularVelocity.add(k1.angularVelocity.scale(dt2))
     }
     tmp.rotation.normalize();
@@ -78,7 +114,7 @@ export const rk4 = (dfdt: (t: Transform) => Transform, transform: Transform, dt:
     tmp = {
         rotation: transform.rotation.add(k2.rotation.scale(dt2)),
         position: transform.position.add(k2.position.scale(dt2)),
-        veloctiy: transform.veloctiy.add(k2.veloctiy.scale(dt2)),
+        velocity: transform.velocity.add(k2.velocity.scale(dt2)),
         angularVelocity: transform.angularVelocity.add(k2.angularVelocity.scale(dt2))
     }
     tmp.rotation.normalize();
@@ -87,7 +123,7 @@ export const rk4 = (dfdt: (t: Transform) => Transform, transform: Transform, dt:
     tmp = {
         rotation: transform.rotation.add(k3.rotation.scale(dt)),
         position: transform.position.add(k3.position.scale(dt)),
-        veloctiy: transform.veloctiy.add(k3.veloctiy.scale(dt)),
+        velocity: transform.velocity.add(k3.velocity.scale(dt)),
         angularVelocity: transform.angularVelocity.add(k3.angularVelocity.scale(dt))
     }
     tmp.rotation.normalize();
@@ -104,9 +140,9 @@ export const rk4 = (dfdt: (t: Transform) => Transform, transform: Transform, dt:
                 k2.position.add(k3.position).scale(dt3)
             )
         ),
-        veloctiy: transform.veloctiy.add(
-            k1.veloctiy.add(k4.veloctiy).scale(dt6).add(
-                k2.veloctiy.add(k3.veloctiy).scale(dt3)
+        velocity: transform.velocity.add(
+            k1.velocity.add(k4.velocity).scale(dt6).add(
+                k2.velocity.add(k3.velocity).scale(dt3)
             )
         ),
         angularVelocity: transform.angularVelocity.add(
