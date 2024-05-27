@@ -189,7 +189,7 @@ export class PhiTop implements IUpdateable {
             // this.mesh.position.y = -this.r(R).y;
         }
 
-        // this.angularVelocity.scaleInPlace(0.999);
-        // this.velocity.scaleInPlace(0.999);
+        this.angularVelocity.scaleInPlace(0.999);
+        this.velocity.scaleInPlace(0.999);
     }
 }
