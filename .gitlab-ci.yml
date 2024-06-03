@@ -10,7 +10,7 @@ pages:
   script:
   - npm install
   - npm i -g vite
-  - npm i -h npm-license-crawler
+  - npm i -g npm-license-crawler
   - npm-license-crawler --omitVersion --json licenses.json
   - export NODE_OPTIONS=--max-old-space-size=32768
   - vite build --base=$CI_PAGES_URL
