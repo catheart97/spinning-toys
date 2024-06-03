@@ -1,5 +1,4 @@
-# hello-babylonjs
-
+# Spinning Toys
 
 To run this demo you need nodejs installed. 
 For best developing experience open the project in Visual Studio Code and install all recommended extensions.
