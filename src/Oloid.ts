@@ -4,6 +4,18 @@ import { DiagMatrix, IUpdateable, Transform } from './Utility';
 
 export class Oloid implements IUpdateable {
 
+    public simulate: boolean = false;
+    public velocity = new bjs.Vector3(0, 0, 0)
+    public angularVelocity = new bjs.Vector3(0, 0, 0)
+
+    public get position(): bjs.Vector3 {
+        return this.core.position;
+    }
+
+    public get rotation(): bjs.Quaternion {
+        return this.core.rotationQuaternion!;
+    }
+
     circleNormals = [
         new bjs.Vector3(0, 1, 0),
         new bjs.Vector3(0, 0, 1),
@@ -19,8 +31,7 @@ export class Oloid implements IUpdateable {
 
     mass: number
     momentOfIntertia: bjs.Matrix // I0
-    velocity = new bjs.Vector3(0, 0, 0)
-    angularVelocity = new bjs.Vector3(0, 0, 0)
+
 
     constructor(mesh: bjs.Mesh) {
         mesh.getChildMeshes(false).forEach(m => {

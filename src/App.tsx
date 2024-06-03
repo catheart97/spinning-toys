@@ -1,157 +1,83 @@
-import * as React from 'react'
-import * as bjs from '@babylonjs/core'
-import '@babylonjs/inspector'
+import React from "react"
+import Simulation, { SimulationScene } from "./Simulation"
 
-import { Oloid } from './Oloid'
+import Licenses from "../licenses.json";
 
-import HDR from "../public/symmetrical_garden_02_4k.jpeg"
-
-import WoodAlbedo from "../public/worn_planks_diff_2k.jpg"
-import WoodNormal from "../public/worn_planks_nor_gl_2k.jpg"
-import WoodRoughness from "../public/worn_planks_rough_2k.jpg"
-
-import OloidMesh from "../public/oloid_lp.glb"
-import PhiTopMesh from "../public/phitop.glb"
-import { IUpdateable } from './Utility'
-import { PhiTop } from './PhiTop'
-
-const App = () => {
-  const canvas = React.useRef<HTMLCanvasElement>()
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    (async () => {
-      const engine = new bjs.Engine(canvas.current, true)
-      const scene = new bjs.Scene(engine)
-      scene.clearColor = new bjs.Color4(0, 0, 0, 0)
-
-      const camera = new bjs.ArcRotateCamera('camera', Math.PI / 2, 0, 10, bjs.Vector3.Zero(), scene)
-      camera.setTarget(bjs.Vector3.Zero())
-      camera.attachControl(canvas.current, false)
-      camera.panningDistanceLimit = 2
-
-      // camera.mode = bjs.Camera.ORTHOGRAPHIC_CAMERA
-      // scene.onBeforeRenderObservable.add(() => {
-      //   const aspect = engine.getRenderWidth() / engine.getRenderHeight()
-
-      //   camera.orthoBottom = -5
-      //   camera.orthoTop = 5
-      //   camera.orthoLeft = -5 * aspect
-      //   camera.orthoRight = 5 * aspect
-      // })
-
-      {
-        const ground = bjs.CreateDisc("ground", {
-          radius: 20,
-          tessellation: 100
-        }, scene);
-        ground.rotation.x = Math.PI / 2;
-        const groundMaterial = new bjs.PBRMetallicRoughnessMaterial("groundMaterial", scene);
-        groundMaterial.baseTexture = new bjs.Texture(WoodAlbedo, scene);
-        groundMaterial.normalTexture = new bjs.Texture(WoodNormal, scene);
-        groundMaterial.metallicRoughnessTexture = new bjs.Texture(WoodRoughness, scene);
-        ground.material = groundMaterial;
-      }
-
-      const updateables: IUpdateable[] = []
-
-      /// ! OLOID 
-      // {
-      //   const res = await bjs.SceneLoader.ImportMeshAsync("", OloidMesh, "", scene)
-      //   const oloidMesh = res.meshes.filter(m => m.name == "__root__")[0] as bjs.Mesh
-
-      //   const oloid = new Oloid(oloidMesh)
-      //   updateables.push(oloid)
-      // }
-
-      /// ! PHITOP
-      {
-        const res = await bjs.SceneLoader.ImportMeshAsync("", PhiTopMesh, "", scene)
-        const phitopMesh = res.meshes.filter(m => m.name == "__root__")[0] as bjs.Mesh
-
-        const phitop = new PhiTop(phitopMesh)
-        updateables.push(phitop)
-      }
-
-      {
-        scene.onAfterRenderObservable.add(() => {
-          const dt = engine.getDeltaTime() / 1000
-          updateables.forEach(u => u.update(dt))
-        });
-      }
-
-      {
-        // setup light and shadows
-        const light = new bjs.DirectionalLight("light", new bjs.Vector3(0, -1, 0), scene);
-        light.intensity = 4;
-        light.position = new bjs.Vector3(0, 10, 0);
-
-        const shadowGenerator = new bjs.CascadedShadowGenerator(1024, light);
-        shadowGenerator.usePercentageCloserFiltering = false;
-        shadowGenerator.filter = bjs.ShadowGenerator.FILTER_PCF;
-        shadowGenerator.forceBackFacesOnly = false;
-        shadowGenerator.normalBias = 0.0175;
-        shadowGenerator.bias = 0.006;
-        shadowGenerator.filteringQuality = bjs.ShadowGenerator.QUALITY_HIGH;
-        shadowGenerator.shadowMaxZ = 100;
-        shadowGenerator.depthClamp = false;
-        shadowGenerator.lambda = 0.5;
-        shadowGenerator.stabilizeCascades = false;
-        shadowGenerator.penumbraDarkness = 0;
-        shadowGenerator.cascadeBlendPercentage = 0.1;
-        shadowGenerator.darkness = .1;
-        shadowGenerator.numCascades = 4;
-        shadowGenerator.useContactHardeningShadow = false;
-
-        scene.meshes.forEach(mesh => {
-          shadowGenerator.addShadowCaster(mesh);
-          mesh.receiveShadows = true;
-        });
-      }
-
-      {
-        // setup lightning and environment 
-        const hdrTexture = new bjs.EquiRectangularCubeTexture(HDR, scene, 1024);
-        scene.environmentTexture = hdrTexture.clone();
-        scene.environmentIntensity = 1;
-
-        hdrTexture.coordinatesMode = bjs.Texture.SKYBOX_MODE;
-        const hdrSkybox = bjs.CreateBox("hdrSkyBox", {
-          size: 1000.0
-        }, scene);
-        const hdrMaterial = new bjs.BackgroundMaterial("hdrMaterial", scene);
-        hdrMaterial.backFaceCulling = false;
-        hdrMaterial.reflectionTexture = hdrTexture;
-        hdrSkybox.material = hdrMaterial;
-      }
-
-      scene.debugLayer.show();
-      engine.runRenderLoop(() => {
-        scene.render()
-      });
-
-      scene.onReadyObservable.addOnce(() => {
-        setLoading(false)
-      })
-    })()
-
-    return () => {
-      canvas.current.remove()
-    }
-  }, [])
-
-  return (
-    <>
-      <div className='fixed inset-0 z-50 bg-black flex items-center justify-center transition-opacity ease-in-out duration-200 pointer-events-none' style={{
-        opacity: loading ? 1 : 0
-      }}>
-        <i className='text-white bi bi-arrow-repeat text-6xl animate-spin'></i>
-      </div>
-      <div className='relative bg-black h-[-webkit-fill-available] h-screen'>
-        <canvas ref={canvas} className='w-full h-[inherit]'></canvas>
-      </div>
-    </>
-  )
+export const App = () => {
+    const [simulation, setSimulation] = React.useState<JSX.Element | undefined>()
+    const dialogRef = React.useRef<HTMLDialogElement>()
+    return (
+        simulation ?? (
+            <>
+                <div className="h-[100dvh] w-full bg-black flex justify-start items-start flex-col gap-4 p-4 text-white">
+                    <div className="text-4xl">
+                        Spinning Toys
+                    </div>
+                    <div>
+                        Click on a toy to start the simulation.
+                    </div>
+                    <div className="border-white border-b-2 h-1 w-full"></div>
+                    <div className="grow flex flex-wrap gap-2 items-center justify-around w-full">
+                        {
+                            Object.keys(SimulationScene).map((k, i) => {
+                                return (
+                                    <button
+                                        key={i}
+                                        className="text-white p-2 w-44 h-44 rounded-3xl border-2 border-white hover:bg-white hover:text-black transition-all ease-in-out duration-200 hover:scale-110"
+                                        onClick={() => setSimulation(<Simulation scene={SimulationScene[k]} />)}
+                                    >
+                                        {k}
+                                    </button>
+                                )
+                            })
+                        }
+                    </div>
+                    <div className="border-white border-b-2 h-1 w-full"></div>
+                    <div className="text-sm flex justify-end w-full gap-8 flex-wrap">
+                        <button
+                            onClick={() => dialogRef.current.showModal()}
+                            className="text-white font-bold hover:scale-110 ease-in-out transition-all duration-200"
+                        >
+                            About & Legal
+                        </button>
+                        <a href="https://catheart97.github.io" className="text-white font-bold hover:scale-110 ease-in-out transition-all duration-200 flex items-center gap-2"><i className="bi bi-github text-white text-2xl"></i> catheart97.github.io</a>
+                    </div>
+                </div>
+                <dialog ref={dialogRef} className="w-[100dvw] min-h-[100dvh] min-w-[100dvw] h-[100dvh] m-0 bg-black/80 p-44">
+                    <div className="rounded-3xl bg-white w-full h-full text-black overflow-hidden flex flex-col gap-2">
+                        <div className="h-8 flex justify-end">
+                            <button
+                                onClick={() => dialogRef.current.close()}
+                                className="transition-all ease-in-out duration-200 hover:scale-110 rounded-full p-2 focus:outline-none p-6"
+                            >
+                                <i className="bi bi-x text-2xl"></i>
+                            </button>
+                        </div>
+                        <div className="grow flex flex-col gap-2 overflow-y-scroll p-6">
+                            <div className="font-bold uppercase">About</div>
+                            <p>
+                                For more legal information about this site please visit: <a href="https://catheart97.github.io">catheart97.github.io</a>.
+                            </p>
+                            <div className="font-bold uppercase">
+                                Open Source Licenses
+                            </div>
+                            <div className="">
+                                {
+                                    Object.keys(Licenses).map((l, i) => {
+                                        const data = Licenses[l];
+                                        return (
+                                            <div key={i} className="flex justify-between">
+                                                <div>{l}</div>
+                                                <div>{data.licenses}</div>
+                                            </div>
+                                        )
+                                    })
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </dialog>
+            </>
+        )
+    )
 }
-
-export default App

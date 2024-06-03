@@ -6,14 +6,23 @@ export const PHI = (1 + Math.sqrt(5)) / 2;
 export const GRAVITY = 9.81
 
 export class PhiTop implements IUpdateable {
-    private simulate: boolean = false;
+    public simulate: boolean = false;
     protected friction: number = 0.3;
-    protected mass: number = 1.0;
+    protected rollFriction = 0.01;
+    protected mass: number = 0.1;
     public mesh: bjs.TransformNode;
     protected momentOfInertia: bjs.Matrix = bjs.Matrix.Identity();
 
-    protected angularVelocity: bjs.Vector3 = bjs.Vector3.Zero();
-    protected velocity: bjs.Vector3 = bjs.Vector3.Zero();
+    public angularVelocity: bjs.Vector3 = bjs.Vector3.Zero();
+    public velocity: bjs.Vector3 = bjs.Vector3.Zero();
+
+    public get position(): bjs.Vector3 {
+        return this.mesh.position;
+    }
+
+    public get rotation(): bjs.Quaternion {
+        return this.mesh.rotationQuaternion!;
+    }
 
     public simulationStepsPerFrame: number = 100;
 
@@ -44,17 +53,6 @@ export class PhiTop implements IUpdateable {
         axes.yAxis.parent = this.mesh;
         axes.zAxis.parent = this.mesh;
 
-        root.getScene().getEngine().getRenderingCanvas()!.addEventListener('keydown', (e) => {
-            if (e.key == ' ') {
-                this.simulate = !this.simulate;
-                console.log(this.simulate, this.mesh.position, this.mesh.rotationQuaternion);
-            } else if (e.key == 's') {
-                this.applyAngularAcceleration(
-                    new bjs.Vector3(0, 10 * Math.PI, 0)
-                )
-            }
-        });
-
         this.reset();
     }
 
@@ -65,7 +63,7 @@ export class PhiTop implements IUpdateable {
         // this.mesh.rotationQuaternion = bjs.Quaternion.Identity();
         this.mesh.position = bjs.Vector3.Zero();
         this.velocity = bjs.Vector3.Zero();
-        this.angularVelocity = bjs.Vector3.Zero();
+        this.angularVelocity = new bjs.Vector3(0, Math.PI * 15, 0);
 
         const world = new bjs.Matrix();
         this.mesh.rotationQuaternion!.toRotationMatrix(world);
@@ -77,7 +75,7 @@ export class PhiTop implements IUpdateable {
         this.angularVelocity.addInPlace(angularAcceleration);
     }
 
-    r(R: bjs.Matrix, B_inv? : bjs.Matrix): bjs.Vector3 {
+    r(R: bjs.Matrix, B_inv?: bjs.Matrix): bjs.Vector3 {
         B_inv = B_inv ?? matMul(matMul(R, this.B0.clone()), R.transpose()).invert();
         let r = vecMul(B_inv, bjs.Vector3.Up()).scale(
             -1 / Math.sqrt(
@@ -110,13 +108,13 @@ export class PhiTop implements IUpdateable {
     df(t: Transform) {
         const R = new bjs.Matrix();
         t.rotation.toRotationMatrix(R);
-        
-        
+
+
         const B_inv = matMul(matMul(R, this.B0.clone()), R.transpose()).invert();
         const r = this.r(R, B_inv);
         const dr = this.dr(r, B_inv, t);
         const I = matMul(matMul(R, this.momentOfInertia.clone()), R.transpose());
-        
+
         const rxu = bjs.Vector3.Cross(r, bjs.Vector3.Up());
 
         // reoccuring terms
@@ -124,7 +122,7 @@ export class PhiTop implements IUpdateable {
         const wxdr = bjs.Vector3.Cross(t.angularVelocity, dr);
         const uTwxdr = bjs.Vector3.Dot(bjs.Vector3.Up(), wxdr);
         const vpwxrµ = t.velocity.add(wxr).scale(this.friction);
-        
+
         // (I + m * [rxu] * [rxu]^T)^-1
         const t1 = I.add(dyad(rxu, rxu).scale(this.mass)).invert();
         // m * g - m * u^T(w x dr) * rxu
@@ -133,15 +131,20 @@ export class PhiTop implements IUpdateable {
         const t4 = bjs.Vector3.Cross(t.angularVelocity, vecMul(I, t.angularVelocity));
         // (r x (v + w x r)) * µ
         const t5 = bjs.Vector3.Cross(r, vpwxrµ);
+
+        const t6 = t.angularVelocity.scale(this.rollFriction);
+
         // (m * g - m * u^T(w x dr) * rxu - w x (I * w) - (r x (v + w x r)) * µ)
-        const t6 = t3.subtract(t4).subtract(t5);
+        const t7 = t3.subtract(t4).subtract(t5).subtract(t6);
         // (I + m * [rxu] * [rxu]^T)^-1 * (m * g - m * u^T(w x dr) * rxu - w x (I * w) - (r x (v + w x r)) * µ)
-        const dw = vecMul(t1, t6);
-        
+        const dw = vecMul(t1, t7);
+
         // m * (g - u^T(dw x r) - u^T(w x dr)
         const dwxr = bjs.Vector3.Cross(dw, r);
         const uTdwxr = bjs.Vector3.Dot(bjs.Vector3.Up(), dwxr);
         const lambda = this.mass * (GRAVITY - uTdwxr - uTwxdr);
+
+        // console.log(- uTdwxr - uTwxdr);
 
         // 1/m * (-m * g * u + lambda * u - µ * (v + w x r))
         const dv = bjs.Vector3.Up().scale(-GRAVITY * this.mass + lambda).subtract(vpwxrµ).scale(1 / this.mass);
@@ -158,8 +161,8 @@ export class PhiTop implements IUpdateable {
     }
 
     update(dt_: number): void {
-        if (!this.simulate) { 
-            return; 
+        if (!this.simulate) {
+            return;
         }
 
         // if (isNaN(this.angularVelocity.length())) {
@@ -176,8 +179,8 @@ export class PhiTop implements IUpdateable {
                 velocity: this.velocity.clone(),
                 angularVelocity: this.angularVelocity.clone()
             }
-    
-            const res = rk4((t) => this.df(t), initial, dt);        
+
+            const res = rk4((t) => this.df(t), initial, dt);
 
             this.mesh.rotationQuaternion = res.rotation;
             this.mesh.position = res.position;
@@ -188,8 +191,5 @@ export class PhiTop implements IUpdateable {
             // this.mesh.rotationQuaternion!.toRotationMatrix(R);
             // this.mesh.position.y = -this.r(R).y;
         }
-
-        this.angularVelocity.scaleInPlace(0.999);
-        this.velocity.scaleInPlace(0.999);
     }
 }

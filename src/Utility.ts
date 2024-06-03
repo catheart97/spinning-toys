@@ -2,6 +2,11 @@ import* as bjs from '@babylonjs/core'
 
 export interface IUpdateable {
     update(dt: number): void
+    get position(): bjs.Vector3
+    get rotation(): bjs.Quaternion
+    angularVelocity: bjs.Vector3
+    velocity: bjs.Vector3
+    simulate: boolean
 }
 
 export const CrossMatrix = (v: bjs.Vector3) : bjs.Matrix => {
