@@ -245,7 +245,7 @@ const Simulation = (props: {
       <div className='relative bg-black h-[100dvh]'>
         <canvas ref={canvas} className='w-full h-full'></canvas>
 
-        <div className='absolute bottom-2 right-2 md:w-96 left-2 md:left-auto bg-black border-2 border-white z-50 rounded-2xl overflow-hidden'>
+        <div className='absolute bottom-2 right-2 md:w-96 left-2 md:left-auto bg-black border-2 border-white z-30 rounded-2xl overflow-hidden'>
           <div className='h-16'>
             <button className='h-full text-white transition-colors ease-in-out duration-200 hover:bg-white hover:text-black px-4' onClick={() => {
               updateable.current.simulate = !updateable.current.simulate;
