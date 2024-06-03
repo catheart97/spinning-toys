@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm-license-crawler --omitVersion --json licenses.json && tsc && vite build",
+    "build:github": "npm-license-crawler --omitVersion --json licenses.json && tsc && vite build --base=spinning-toys",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
