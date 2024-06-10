@@ -1,23 +1,29 @@
 import * as bjs from '@babylonjs/core'
 import * as React from 'react'
 
-import HDR from "../public/symmetrical_garden_02_4k.jpeg"
+import HDR from "../resources/symmetrical_garden_02_4k.jpeg"
 
-import WoodAlbedo from "../public/worn_planks_diff_2k.jpg"
-import WoodNormal from "../public/worn_planks_nor_gl_2k.jpg"
-import WoodRoughness from "../public/worn_planks_rough_2k.jpg"
+import WoodAlbedo from "../resources/worn_planks_diff_2k.jpg"
+import WoodNormal from "../resources/worn_planks_nor_gl_2k.jpg"
+import WoodRoughness from "../resources/worn_planks_rough_2k.jpg"
 
-import OloidMesh from "../public/oloid_lp.glb"
-import PhiTopMesh from "../public/phitop.glb"
-import { PhiTop } from './PhiTop'
 import { IUpdateable } from './Utility'
-import { Oloid } from './Oloid'
+
+import OloidMesh from "../resources/oloid_lp.glb"
+import PhiTopMesh from "../resources/phitop.glb"
+import RattlebackMesh from "../resources/rattleback.glb"
+
+import { PhiTop } from './toys/PhiTop'
+import { Oloid } from './toys/Oloid'
+import { Rattleback } from './toys/Rattleback'
+
 import 'chart.js'
 import { Chart } from 'chart.js/auto'
 
 export enum SimulationScene {
   Oloid = 'Oloid',
-  PhiTop = 'PhiTop'
+  PhiTop = 'PhiTop',
+  Rattleback = 'Rattleback'
 }
 
 const useForceUpdate = () => {
@@ -49,6 +55,12 @@ const Simulation = (props: {
       camera.setTarget(bjs.Vector3.Zero())
       camera.attachControl(canvas.current, false)
       camera.panningDistanceLimit = 2
+      camera.lowerRadiusLimit = 5
+      camera.lowerBetaLimit = 0
+      camera.upperBetaLimit = Math.PI / 2 - 0.1
+      // camera.lowerAlphaLimit = Math.PI / 4
+      // camera.upperAlphaLimit = Math.PI / 2
+
 
       const chart = new Chart(chartCanvas.current, {
         type: 'line',
@@ -140,6 +152,16 @@ const Simulation = (props: {
 
             const phitop = new PhiTop(phitopMesh)
             updateable.current = phitop
+          }
+          break;
+        case 'Rattleback':
+          /// ! RATTLEBACK
+          {
+            const res = await bjs.SceneLoader.ImportMeshAsync("", RattlebackMesh, "", scene)
+            const rattlebackMesh = res.meshes.filter(m => m.name == "__root__")[0] as bjs.Mesh
+
+            const rattleback = new Rattleback(rattlebackMesh)
+            updateable.current = rattleback
           }
           break;
       }
