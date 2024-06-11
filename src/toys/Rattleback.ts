@@ -1,6 +1,6 @@
 import * as bjs from '@babylonjs/core';
 import '@babylonjs/loaders';
-import { IUpdateable, Transform, dyad, matMul, rk4, vecMul } from '../Utility';
+import { IUpdateable, Transform, dyad, matMul, quaternionToMatrix, rk4, vecMul } from '../Utility';
 
 export const PHI = (1 + Math.sqrt(5)) / 2;
 export const GRAVITY = 9.81;
@@ -76,13 +76,15 @@ export class Rattleback implements IUpdateable {
     }
 
     reset() {
-        this.mesh.rotationQuaternion = bjs.Quaternion.RotationAxis(
-            bjs.Vector3.Forward(), 0.01
-        )
-        // this.mesh.rotationQuaternion = bjs.Quaternion.Identity();
+        // this.mesh.rotationQuaternion = bjs.Quaternion.RotationAxis(bjs.Vector3.Forward(), 0)
+        this.mesh.rotationQuaternion = bjs.Quaternion.Identity();
         this.mesh.position = bjs.Vector3.Zero();
         this.velocity = bjs.Vector3.Zero();
-        this.angularVelocity = new bjs.Vector3(0.01, -2.0, -0.02);
+        this.angularVelocity = new bjs.Vector3(0.01, 2.0, -0.02);
+        this.velocity = bjs.Vector3.Cross(
+            this.r(bjs.Matrix.Identity()),
+            this.angularVelocity
+        )
 
         const world = new bjs.Matrix();
         this.mesh.rotationQuaternion!.toRotationMatrix(world);
@@ -113,18 +115,13 @@ export class Rattleback implements IUpdateable {
     }
 
     dr(r: bjs.Vector3, B_inv: bjs.Matrix, transform: Transform) {
-        // reoccuring terms
-        // 1 / -u^T * r
-        const s = 1 / -bjs.Vector3.Dot(bjs.Vector3.Up(), r);
-        // (w x r)
+        const s = -bjs.Vector3.Dot(bjs.Vector3.Up(), r);
         const wxr = bjs.Vector3.Cross(transform.angularVelocity, r);
-        // (w x u)
         const wxu = bjs.Vector3.Cross(transform.angularVelocity, bjs.Vector3.Up());
-        // (w x r) - B^-1 (w x u) / (u^T * r) - r * u^T(w x r)
         const rp = wxr.add(
-            vecMul(B_inv, wxu).scale(s)
+            vecMul(B_inv, wxu).scale(1 / s)
         ).add(
-            r.scale(bjs.Vector3.Dot(bjs.Vector3.Up(), wxr) * s)
+            r.scale(bjs.Vector3.Dot(bjs.Vector3.Up(), wxr) / s)
         )
         return rp;
     }
@@ -134,42 +131,47 @@ export class Rattleback implements IUpdateable {
         t.rotation.toRotationMatrix(R);
 
         // I and B^-1 in world space
-        const I = matMul(matMul(R.transpose(), this.momentOfInertia.clone()), R);
-        const B_inv = matMul(matMul(R.transpose(), this.B0.clone()), R).invert();
+        const I = matMul(matMul(R, this.momentOfInertia.clone()), R.transpose());
+        const B_inv = matMul(matMul(R, this.B0.clone()), R.transpose()).invert();
 
-        // compute contact point and its derivative
-        let r = this.r(R, B_inv);
+        // extreme point in y-direction (upwards/downwards)
+        let r = this.r(R.transpose(), B_inv);
         let dr = this.dr(r, B_inv, t);
-        
-        // adjust for the offset to the center of mass
-        const Re3 = vecMul(R, bjs.Vector3.Up())
+
+        const Re3 = vecMul(R.transpose(), bjs.Vector3.Up())
         r = r.add(Re3.scale(this.centerOfMassOffset))
+
         dr = dr.add(bjs.Vector3.Cross(t.angularVelocity, Re3).scale(this.centerOfMassOffset))
 
-        // J = (I - m r r^T + m r^T r)^-1
-        const J = (I.clone().subtract(dyad(r, r).scale(this.mass)).add(
+        const I_INV = (I.clone().add(dyad(r, r).scale(-this.mass)).add(
             bjs.Matrix.Identity().scale(this.mass * bjs.Vector3.Dot(r, r))
         )).invert();
-        J.setRowFromFloats(3, 0, 0, 0, 1);
+        I_INV.setRowFromFloats(3, 0, 0, 0, 1);
 
-        // m g r x u
-        const mgrxu = bjs.Vector3.Cross(r, bjs.Vector3.Up()).scale(GRAVITY * this.mass);
+        const rxu = bjs.Vector3.Cross(r, bjs.Vector3.Up()).scale(9.81 * this.mass);
+        const wxIw = bjs.Vector3.Cross(
+            t.angularVelocity,
+            vecMul(I, t.angularVelocity)
+        );
+        const rxwxdr = bjs.Vector3.Cross(
+            r,
+            bjs.Vector3.Cross(
+                t.angularVelocity,
+                dr
+            )
+        ).scale(this.mass);
 
-        // w x (I w)
-        const wxIw = bjs.Vector3.Cross(t.angularVelocity, vecMul(I, t.angularVelocity));
+        const u = rxu.subtract(wxIw).subtract(rxwxdr);
 
-        // m r x (w x dr)
-        const rxwxdr = bjs.Vector3.Cross(r, bjs.Vector3.Cross(t.angularVelocity, dr)).scale(this.mass);
+        const dw = vecMul(I_INV, u);
 
-        // J (m g r x u - w x (I w) - m r x (w x dr))
-        const dw = vecMul(J, mgrxu.subtract(wxIw).subtract(rxwxdr));
-        // r x dw + dr x w
-        const dv = bjs.Vector3.Cross(r, dw).add(bjs.Vector3.Cross(dr, t.angularVelocity));
+        const dv = bjs.Vector3.Cross(dw, r).scale(-1).subtract(
+            bjs.Vector3.Cross(t.angularVelocity, dr)
+        );
         dv.y = 0;
-        
+
         const dc = t.velocity.clone();
-        
-        // transform w to rotation quaternion
+
         const qw = new bjs.Quaternion(t.angularVelocity.x, t.angularVelocity.y, t.angularVelocity.z, 0);
         const dq = qw.multiply(t.rotation).scale(0.5);
 
@@ -179,6 +181,39 @@ export class Rattleback implements IUpdateable {
             velocity: dv,
             angularVelocity: dw
         }
+
+        // const J = (I.clone().subtract(dyad(r, r).scale(this.mass)).add(
+        //     bjs.Matrix.Identity().scale(this.mass * bjs.Vector3.Dot(r, r))
+        // )).clone().invert();
+        // J.setRowFromFloats(3, 0, 0, 0, 1);
+
+        // // m g r x u
+        // const mgrxu = bjs.Vector3.Cross(r, bjs.Vector3.Up()).scale(GRAVITY * this.mass);
+
+        // // w x (I w)
+        // const wxIw = bjs.Vector3.Cross(t.angularVelocity, vecMul(I, t.angularVelocity));
+
+        // // m r x (w x dr)
+        // const rxwxdr = bjs.Vector3.Cross(r, bjs.Vector3.Cross(t.angularVelocity, dr)).scale(this.mass);
+
+        // // J (m g r x u - w x (I w) - m r x (w x dr))
+        // const dw = vecMul(J, mgrxu.subtract(wxIw).subtract(rxwxdr));
+        // // r x dw + dr x w
+        // const dv = bjs.Vector3.Cross(r, dw).add(bjs.Vector3.Cross(dr, t.angularVelocity));
+        // dv.y = 0;
+        
+        // const dc = t.velocity.clone();
+
+        // // transform w to rotation quaternion
+        // const qw = new bjs.Quaternion(t.angularVelocity.x, t.angularVelocity.y, t.angularVelocity.z, 0);
+        // const dq = qw.multiply(t.rotation).scale(0.5);
+
+        // return {
+        //     position: bjs.Vector3.Zero(),
+        //     rotation: dq,
+        //     velocity: dv,
+        //     angularVelocity: dw
+        // }
     }
 
     update(dt_: number): void {
@@ -191,7 +226,8 @@ export class Rattleback implements IUpdateable {
         //     return;
         // }
 
-        const dt = dt_ / this.simulationStepsPerFrame;
+        // const dt = dt_ / this.simulationStepsPerFrame;
+        const dt = 5e-4;
 
         for (let i = 0; i < this.simulationStepsPerFrame; ++i) {
             const initial: Transform = {
@@ -207,10 +243,10 @@ export class Rattleback implements IUpdateable {
             this.mesh.position = res.position;
             this.velocity = res.velocity;
             this.angularVelocity = res.angularVelocity;
-
-            // const R = new bjs.Matrix();
-            // this.mesh.rotationQuaternion!.toRotationMatrix(R);
-            // this.mesh.position.y = -this.r(R).y;
         }
+
+        // const R = new bjs.Matrix();
+        // this.mesh.rotationQuaternion!.toRotationMatrix(R);
+        // this.mesh.position.y = -this.r(R).y;
     }
 }

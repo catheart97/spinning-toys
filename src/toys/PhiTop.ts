@@ -71,7 +71,7 @@ export class PhiTop implements IUpdateable {
     }
 
     r(R: bjs.Matrix, B_inv?: bjs.Matrix): bjs.Vector3 {
-        B_inv = B_inv ?? matMul(matMul(R.transpose(), this.B0.clone()), R).invert();
+        B_inv = B_inv ?? matMul(matMul(R, this.B0.clone()), R.transpose()).invert();
         let r = vecMul(B_inv, bjs.Vector3.Up()).scale(
             -1 / Math.sqrt(
                 bjs.Vector3.Dot(
@@ -104,11 +104,10 @@ export class PhiTop implements IUpdateable {
         const R = new bjs.Matrix();
         t.rotation.toRotationMatrix(R);
 
-
-        const B_inv = matMul(matMul(R.transpose(), this.B0.clone()), R).invert();
+        const B_inv = matMul(matMul(R, this.B0.clone()), R.transpose()).invert();
+        const I = matMul(matMul(R, this.momentOfInertia.clone()), R.transpose());
         const r = this.r(R, B_inv);
         const dr = this.dr(r, B_inv, t);
-        const I = matMul(matMul(R.transpose(), this.momentOfInertia.clone()), R);
 
         const rxu = bjs.Vector3.Cross(r, bjs.Vector3.Up());
 

@@ -85,6 +85,12 @@ const Simulation = (props: {
               borderColor: "blue",
               fill: false
             },
+            {
+              label: "Angular Velocity",
+              data: [],
+              borderColor: "white",
+              fill: false
+            }
           ]
         },
         options: {
@@ -183,12 +189,14 @@ const Simulation = (props: {
               chart.data.datasets[0].data.shift();
               chart.data.datasets[1].data.shift();
               chart.data.datasets[2].data.shift();
+              chart.data.datasets[3].data.shift();
             }
 
             chart.data.labels.push(total.toFixed(2));
             chart.data.datasets[0].data.push(updateable.current.angularVelocity.x);
             chart.data.datasets[1].data.push(updateable.current.angularVelocity.y);
             chart.data.datasets[2].data.push(updateable.current.angularVelocity.z);
+            chart.data.datasets[3].data.push(updateable.current.angularVelocity.length());
 
             chart.update();
           }
