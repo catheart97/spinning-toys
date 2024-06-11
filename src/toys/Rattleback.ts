@@ -102,7 +102,7 @@ export class Rattleback implements IUpdateable {
     }
 
     r(R: bjs.Matrix, B_inv?: bjs.Matrix): bjs.Vector3 {
-        B_inv = B_inv ?? matMul(matMul(R.transpose(), this.B0.clone()), R).invert();
+        B_inv = B_inv ?? matMul(matMul(R, this.B0.clone()), R.transpose()).invert();
         let r = vecMul(B_inv, bjs.Vector3.Up()).scale(
             -1 / Math.sqrt(
                 bjs.Vector3.Dot(
@@ -245,8 +245,8 @@ export class Rattleback implements IUpdateable {
             this.angularVelocity = res.angularVelocity;
         }
 
-        // const R = new bjs.Matrix();
-        // this.mesh.rotationQuaternion!.toRotationMatrix(R);
-        // this.mesh.position.y = -this.r(R).y;
+        const R = new bjs.Matrix();
+        this.mesh.rotationQuaternion!.toRotationMatrix(R);
+        this.mesh.position.y = -this.r0(R).y;
     }
 }
