@@ -168,7 +168,6 @@ export class Rattleback implements IUpdateable {
         const dv = bjs.Vector3.Cross(dw, r).scale(-1).subtract(
             bjs.Vector3.Cross(t.angularVelocity, dr)
         );
-        dv.y = 0;
 
         const dc = t.velocity.clone();
 
@@ -182,38 +181,6 @@ export class Rattleback implements IUpdateable {
             angularVelocity: dw
         }
 
-        // const J = (I.clone().subtract(dyad(r, r).scale(this.mass)).add(
-        //     bjs.Matrix.Identity().scale(this.mass * bjs.Vector3.Dot(r, r))
-        // )).clone().invert();
-        // J.setRowFromFloats(3, 0, 0, 0, 1);
-
-        // // m g r x u
-        // const mgrxu = bjs.Vector3.Cross(r, bjs.Vector3.Up()).scale(GRAVITY * this.mass);
-
-        // // w x (I w)
-        // const wxIw = bjs.Vector3.Cross(t.angularVelocity, vecMul(I, t.angularVelocity));
-
-        // // m r x (w x dr)
-        // const rxwxdr = bjs.Vector3.Cross(r, bjs.Vector3.Cross(t.angularVelocity, dr)).scale(this.mass);
-
-        // // J (m g r x u - w x (I w) - m r x (w x dr))
-        // const dw = vecMul(J, mgrxu.subtract(wxIw).subtract(rxwxdr));
-        // // r x dw + dr x w
-        // const dv = bjs.Vector3.Cross(r, dw).add(bjs.Vector3.Cross(dr, t.angularVelocity));
-        // dv.y = 0;
-        
-        // const dc = t.velocity.clone();
-
-        // // transform w to rotation quaternion
-        // const qw = new bjs.Quaternion(t.angularVelocity.x, t.angularVelocity.y, t.angularVelocity.z, 0);
-        // const dq = qw.multiply(t.rotation).scale(0.5);
-
-        // return {
-        //     position: bjs.Vector3.Zero(),
-        //     rotation: dq,
-        //     velocity: dv,
-        //     angularVelocity: dw
-        // }
     }
 
     update(dt_: number): void {
@@ -245,8 +212,8 @@ export class Rattleback implements IUpdateable {
             this.angularVelocity = res.angularVelocity;
         }
 
-        const R = new bjs.Matrix();
-        this.mesh.rotationQuaternion!.toRotationMatrix(R);
-        this.mesh.position.y = -this.r0(R).y;
+        // const R = new bjs.Matrix();
+        // this.mesh.rotationQuaternion!.toRotationMatrix(R);
+        // this.mesh.position.y = -this.r0(R).y;
     }
 }

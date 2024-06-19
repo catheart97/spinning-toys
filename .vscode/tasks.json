@@ -4,24 +4,18 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Run Development Server",
+            "label": "App",
             "type": "shell",
             "command": "npm run dev",
-            "isBackground": true
-        },
-        {
-            "label": "Terminate All Tasks",
-            "command": "echo ${input:terminate}",
-            "type": "shell",
-            "problemMatcher": []
-        }
-    ],
-    "inputs": [
-        {
-            "id": "terminate",
-            "type": "command",
-            "command": "workbench.action.tasks.terminate",
-            "args": "terminateAll"
+            "isBackground": true,
+            "options": {
+                "statusbar": {
+                    "icon": {
+                        "id": "play"
+                    },
+                    "backgroundColor": "statusBarItem.warningBackground"
+                }
+            }
         }
     ]
 }

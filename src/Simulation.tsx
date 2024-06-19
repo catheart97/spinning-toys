@@ -12,10 +12,12 @@ import { IUpdateable } from './Utility'
 import OloidMesh from "../resources/oloid_lp.glb"
 import PhiTopMesh from "../resources/phitop.glb"
 import RattlebackMesh from "../resources/rattleback.glb"
+import TippeTopMesh from "../resources/tippetop.glb"
 
 import { PhiTop } from './toys/PhiTop'
 import { Oloid } from './toys/Oloid'
 import { Rattleback } from './toys/Rattleback'
+import { TippeTop } from './toys/TippeTop'
 
 import 'chart.js'
 import { Chart } from 'chart.js/auto'
@@ -23,7 +25,8 @@ import { Chart } from 'chart.js/auto'
 export enum SimulationScene {
   Oloid = 'Oloid',
   PhiTop = 'PhiTop',
-  Rattleback = 'Rattleback'
+  Rattleback = 'Rattleback',
+  TippeTop = 'TippeTop'
 }
 
 const useForceUpdate = () => {
@@ -168,6 +171,16 @@ const Simulation = (props: {
 
             const rattleback = new Rattleback(rattlebackMesh)
             updateable.current = rattleback
+          }
+          break;
+        case 'TippeTop':
+          /// ! TIPPETOP
+          {
+            const res = await bjs.SceneLoader.ImportMeshAsync("", TippeTopMesh, "", scene)
+            const phitopMesh = res.meshes.filter(m => m.name == "__root__")[0] as bjs.Mesh
+
+            const phitop = new TippeTop(phitopMesh)
+            updateable.current = phitop
           }
           break;
       }

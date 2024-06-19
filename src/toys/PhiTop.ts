@@ -125,7 +125,7 @@ export class PhiTop implements IUpdateable {
         );
         // r x u - µ_roll * |r| * w / |w|
         const W = rxu.subtract(
-            t.angularVelocity.normalizeToNew().scale(this.rollFriction / r.length())
+            t.angularVelocity.normalizeToNew().scale(this.rollFriction * r.length())
         );
 
         const J = I.subtract(dyad(W, rxu.scale(-this.mass))).invert();
